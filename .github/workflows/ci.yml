@@ -8,6 +8,15 @@ on:
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   GCP_REGION: ${{ vars.GCP_REGION }}
+  TOP_FEATURES: ${{ vars.TOP_FEATURES }}
+  DELAY_THRESHOLD_MINUTE: ${{ vars.DELAY_THRESHOLD_MINUTE }}
+  LEARNING_RATE: ${{ vars.LEARNING_RATE }}
+  RANDOM_STATE: ${{ vars.RANDOM_STATE }}
+  MODEL_PATH: ${{ vars.ODEL_PAT }}
+  MODEL_VERSION: ${{ vars.MODEL_VERSION }}
+  DATA_LOCAL_PATH: ${{ vars.DATA_LOCAL_PATH }}
+  DATA_PATH: ${{ vars.DATA_PATH }}
+  MODEL_LOCAL_PATH: ${{ vars.MODEL_LOCAL_PATH }}
 
 jobs:
   trigger-training:
