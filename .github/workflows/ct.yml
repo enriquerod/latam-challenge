@@ -28,9 +28,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
-        run: |
-          apt-get update && apt-get install -y curl
+      # - name: Install System Dependencies
+      #   run: |
+      #     apt-get update && apt-get install -y curl
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
