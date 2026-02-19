@@ -14,10 +14,11 @@ jobs:
   trigger-training:
     # Solo correr si el PR fue mergeado y la branch origen es feature/*
     if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'feature/')
-
+    
+    environment: DEV
     runs-on: ubuntu-latest
-    container:
-      image: python:3.12-slim
+    # container:
+    #   image: python:3.12-slim
       
     permissions:
       contents: read
@@ -27,9 +28,9 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install System Dependencies
-        run: |
-          apt-get update && apt-get install -y curl
+      # - name: Install System Dependencies
+      #   run: |
+      #     apt-get update && apt-get install -y curl
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
@@ -39,25 +40,20 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      - name: Configure Docker for GCP
+        run: |
+          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+
       - name: Submit Custom Job to Vertex AI
         run: |
           gcloud ai custom-jobs create \
             --project="${{ vars.GCP_PROJECT_ID }}" \
             --region="${{ vars.GCP_REGION }}" \
-            --display-name="ct-onnx-train-${{ github.event.pull_request.number }}-${{ github.run_id }}" \
-            --labels=vars=dev,workflow=continuous-training \
-            --worker-pool-spec=""" 
-              machine-type=n1-standard-4,
-              replica-count=1,
-              executor-image-uri=us-docker.pkg.dev/vertex-ai/training/python-cpu:latest,
-              local-package-path=.,
-              script=train.py,
-              container-spec={
-                env=[
-                  {name=BUCKET_NAME, value=${{ vars.BUCKET_NAME }}},
-                  {name=PROJECT_ID, value=${{ vars.GCP_PROJECT_ID }}},
-                  {name=MODEL_SECRET_KEY, value=${{ secrets.MI_API_SECRET }}},
-                  {name=COMMIT_SHA, value=${{ github.sha }}}
-                ]
-              }
-            """
+            --display-name="ct-onnx-train-${{ github.run_id }}" \
+            --labels=env=dev,workflow=continuous-training \
+            --worker-pool-spec=machine-type=n1-standard-2,replica-count=1,executor-image-uri=python:3.12-slim,local-package-path=./,script=challenge/model_train.py
+        env:
+          BUCKET_NAME: ${{ vars.BUCKET_NAME }}
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          MODEL_SECRET_KEY: ${{ secrets.MI_API_SECRET }}
+          COMMIT_SHA: ${{ github.sha }}
