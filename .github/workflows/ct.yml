@@ -3,10 +3,7 @@ name: Continuous Training
 on:
   pull_request:
     branches: [develop]
-    types: [closed]
-    paths: 
-      - 'challenge/model.py'
-      - 'data/**'
+    types: [closed] # solo cuando el PR se cierra (merge o cerrado)
 
 env:
   GCP_PROJECT_ID: ${{ env.GCP_PROJECT_ID }}
@@ -15,13 +12,13 @@ env:
 
 jobs:
   trigger-training:
+    # Solo correr si el PR fue mergeado y la branch origen es feature/*
     if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'feature/')
-    
+
     runs-on: ubuntu-latest
-    # Usamos imagen ligera para el orquestador (GitHub)
     container:
       image: python:3.12-slim
-        
+      
     permissions:
       contents: read
       id-token: write
@@ -30,7 +27,6 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # Instalamos curl
       - name: Install System Dependencies
         run: |
           apt-get update && apt-get install -y curl
@@ -50,7 +46,7 @@ jobs:
             --region="${{ env.GCP_REGION }}" \
             --display-name="ct-onnx-train-${{ github.event.pull_request.number }}-${{ github.run_id }}" \
             --labels=env=dev,workflow=continuous-training \
-            --worker-pool-spec="""
+            --worker-pool-spec=""" 
               machine-type=n1-standard-4,
               replica-count=1,
               executor-image-uri=us-docker.pkg.dev/vertex-ai/training/python-cpu:latest,
