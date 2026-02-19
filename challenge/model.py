@@ -4,7 +4,6 @@ import xgboost as xgb
 import os
 from typing import Tuple, Union, List
 
-
 class DelayModel:
 
     def __init__(self):
@@ -12,13 +11,12 @@ class DelayModel:
         self._onnx_session = None
 
         # ENV VARS
-        self.top_features = int(os.getenv("TOP_FEATURES"))
+        self.top_features = [f.strip() for f in os.getenv("TOP_FEATURES", "").split(",") if f.strip()]
         self.delay_threshold = int(os.getenv("DELAY_THRESHOLD_MINUTES"))
         self.model_path = os.getenv("MODEL_PATH")
         self.learning_rate = float(os.getenv("LEARNING_RATE"))
         self.random_state = int(os.getenv("RANDOM_STATE"))
-        self.model_version = int(os.getenv("MODEL_VERSION"))
-
+        self.model_version = os.getenv("MODEL_VERSION")
 
     # ==========================
     # Preprocesamiento
@@ -124,9 +122,11 @@ class DelayModel:
         # onnx_model.model_version = 1
         onnx_model.doc_string = "Delay Prediction Model - LATAM Airlines"
 
+        meta_v = onnx_model.metadata_props.add()
+        meta_v.key = "version"
+        meta_v.value = str(self.model_version)
+
         meta_thr = onnx_model.metadata_props.add()
-        meta_thr.key = "version"
-        meta_thr.value = str(self.model_version)
         meta_thr.key = "delay_threshold_minutes"
         meta_thr.value = str(self.delay_threshold)
         

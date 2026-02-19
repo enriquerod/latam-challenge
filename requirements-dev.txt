@@ -11,6 +11,8 @@ coverage~=7.3.0
 pytest~=7.4.0
 pytest-cov~=4.1.0
 mockito~=1.4.0
-xgboost==2.0.3
-onnxruntime>=1.10.0
-onnxmltools>=1.10.0
+xgboost==1.6.2
+onnxruntime>=1.24.1
+onnxmltools>=1.16.0
+google-cloud-storage==3.9.0
+python-dotenv==1.2.1
