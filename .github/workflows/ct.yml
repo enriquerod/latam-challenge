@@ -45,20 +45,11 @@ jobs:
           gcloud ai custom-jobs create \
             --project="${{ vars.GCP_PROJECT_ID }}" \
             --region="${{ vars.GCP_REGION }}" \
-            --display-name="ct-onnx-train-${{ github.event.pull_request.number }}-${{ github.run_id }}" \
-            --labels=vars=dev,workflow=continuous-training \
-            --worker-pool-spec=""" 
-              machine-type=n1-standard-4,
-              replica-count=1,
-              executor-image-uri=us-docker.pkg.dev/vertex-ai/training/python-cpu:latest,
-              local-package-path=.,
-              script=train.py,
-              container-spec={
-                env=[
-                  {name=BUCKET_NAME, value=${{ vars.BUCKET_NAME }}},
-                  {name=PROJECT_ID, value=${{ vars.GCP_PROJECT_ID }}},
-                  {name=MODEL_SECRET_KEY, value=${{ secrets.MI_API_SECRET }}},
-                  {name=COMMIT_SHA, value=${{ github.sha }}}
-                ]
-              }
-            """
+            --display-name="ct-onnx-train-${{ github.run_id }}" \
+            --labels=env=dev,workflow=continuous-training \
+            --worker-pool-spec=machine-type=n1-standard-2,replica-count=1,executor-image-uri=us-docker.pkg.dev/vertex-ai/training/python-cpu:latest,local-package-path=.,script=challenge/model_train.py,requirements=requirements-dev.txt
+        env:
+          BUCKET_NAME: ${{ vars.BUCKET_NAME }}
+          PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          MODEL_SECRET_KEY: ${{ secrets.MI_API_SECRET }}
+          COMMIT_SHA: ${{ github.sha }}
