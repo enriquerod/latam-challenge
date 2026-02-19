@@ -18,9 +18,7 @@ jobs:
     # Usamos imagen ligera para el orquestador (GitHub)
     container:
       image: python:3.12-slim
-    
-    if: startsWith(github.head_ref, 'feature/')
-    
+
     permissions:
       contents: read
       id-token: write
