@@ -28,19 +28,21 @@ jobs:
       id-token: write
 
     steps:
-      - name: Checkout Code
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         with:
-          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up Cloud SDK
+      - name: Setup gcloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Submit Custom Job to Vertex AI
+      - name: Submit Vertex AI Custom Training Job
         run: |
+          set -e
+
           cat <<EOF > job.yaml
           workerPoolSpecs:
             - machineSpec:
@@ -50,25 +52,25 @@ jobs:
                 imageUri: python:3.12-slim
                 env:
                   - name: DATA_PATH
-                    value: ${DATA_PATH}
+                    value: "${DATA_PATH}"
                   - name: BUCKET_NAME
-                    value: ${BUCKET_NAME}
+                    value: "${BUCKET_NAME}"
                   - name: PROJECT_ID
-                    value: ${GCP_PROJECT_ID}
+                    value: "${GCP_PROJECT_ID}"
                   - name: MODEL_SECRET_KEY
-                    value: ${MODEL_SECRET_KEY}
+                    value: "${MODEL_SECRET_KEY}"
                   - name: COMMIT_SHA
-                    value: ${GITHUB_SHA}
+                    value: "${GITHUB_SHA}"
                   - name: TOP_FEATURES
-                    value: ${TOP_FEATURES}
+                    value: "${TOP_FEATURES}"
                   - name: DELAY_THRESHOLD_MINUTES
-                    value: ${DELAY_THRESHOLD_MINUTES}
+                    value: "${DELAY_THRESHOLD_MINUTES}"
                   - name: LEARNING_RATE
-                    value: ${LEARNING_RATE}
+                    value: "${LEARNING_RATE}"
                   - name: MODEL_PATH
-                    value: ${MODEL_PATH}
+                    value: "${MODEL_PATH}"
                   - name: RANDOM_STATE
-                    value: ${RANDOM_STATE}
+                    value: "${RANDOM_STATE}"
               pythonPackageSpec:
                 executorImageUri: python:3.12-slim
                 pythonModule: challenge.model_train
