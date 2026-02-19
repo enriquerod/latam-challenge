@@ -41,8 +41,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@v1
 
       - name: Configure Docker for GCP
-        run: |
-          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker gcr.io --quiet
 
       - name: Submit Custom Job to Vertex AI
         run: |
