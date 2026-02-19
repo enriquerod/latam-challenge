@@ -57,11 +57,13 @@ def main():
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
     
-    # Guardamos con el SHA para tener versionamiento
-    blob = bucket.blob(f"models/model_{COMMIT_SHA}.onnx")
+    # Vertex AI Model Registry prefiere leer de directorios (artifact_uri)
+    gcs_blob_path = f"models/{COMMIT_SHA}/delay_model.onnx"
+    
+    blob = bucket.blob(gcs_blob_path)
     blob.upload_from_filename(LOCAL_MODEL_PATH)
     
-    print("Proceso completado con éxito.")
+    print(f"Modelo guardado en GCS: gs://{BUCKET_NAME}/{gcs_blob_path}")
 
 if __name__ == "__main__":
     current_dir = os.getcwd()
