@@ -1,0 +1,36 @@
+name: Continuous Integration 
+
+on:
+  pull_request:
+    branches: [develop,  'release/*', main]
+    types: [closed] 
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+
+jobs:
+  trigger-training:
+    # La condición estricta: Solo si fue merged y viene de una rama feature/
+    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'feature/')
+    
+    environment: DEV
+    runs-on: ubuntu-latest
+      
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run Model Unit Tests
+        run: make model-test
+
+      - name: Run API Integration Tests
+        run: make api-test

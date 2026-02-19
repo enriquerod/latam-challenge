@@ -3,7 +3,7 @@ name: Continuous Training
 on:
   pull_request:
     branches: [develop]
-    types: [closed] # Solo se activa cuando el PR se cierra (ya sea mergeado o descartado)
+    types: [closed] 
 
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
