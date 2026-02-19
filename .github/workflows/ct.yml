@@ -47,7 +47,7 @@ jobs:
             --region="${{ vars.GCP_REGION }}" \
             --display-name="ct-onnx-train-${{ github.run_id }}" \
             --labels=env=dev,workflow=continuous-training \
-            --worker-pool-spec=machine-type=n1-standard-2,replica-count=1,executor-image-uri=python:3.12-slim,local-package-path=./,script=challenge/model_train.py,requirements=challenge/requirements-dev.txt
+            --worker-pool-spec=machine-type=n1-standard-2,replica-count=1,executor-image-uri=python:3.12-slim,local-package-path=./,script=challenge/model_train.py
         env:
           BUCKET_NAME: ${{ vars.BUCKET_NAME }}
           PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
