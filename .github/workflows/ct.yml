@@ -3,23 +3,26 @@ name: Continuous Training
 on:
   pull_request:
     branches: [develop]
-    types: [closed] # solo cuando el PR se cierra (merge o cerrado)
+    types: [closed]
 
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   GCP_REGION: ${{ vars.GCP_REGION }}
   BUCKET_NAME: ${{ vars.BUCKET_NAME }}
+  DATA_PATH: ${{ vars.DATA_PATH }}
+  TOP_FEATURES: ${{ vars.TOP_FEATURES }}
+  DELAY_THRESHOLD_MINUTES: ${{ vars.DELAY_THRESHOLD_MINUTES }}
+  LEARNING_RATE: ${{ vars.LEARNING_RATE }}
+  MODEL_PATH: ${{ vars.MODEL_PATH }}
+  RANDOM_STATE: ${{ vars.RANDOM_STATE }}
+  MODEL_SECRET_KEY: ${{ secrets.MI_API_SECRET }}
 
 jobs:
   trigger-training:
-    # Solo correr si el PR fue mergeado y la branch origen es feature/*
     if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'feature/')
-    
     environment: DEV
     runs-on: ubuntu-latest
-    # container:
-    #   image: python:3.12-slim
-      
+
     permissions:
       contents: read
       id-token: write
@@ -27,10 +30,6 @@ jobs:
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
-      # - name: Install System Dependencies
-      #   run: |
-      #     apt-get update && apt-get install -y curl
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
@@ -40,44 +39,45 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
-      - name: Configure Docker for GCP
-        run: gcloud auth configure-docker gcr.io --quiet
-
       - name: Submit Custom Job to Vertex AI
         run: |
+          cat <<EOF > job.yaml
+          workerPoolSpecs:
+            - machineSpec:
+                machineType: n1-highmem-2
+              replicaCount: 1
+              containerSpec:
+                imageUri: python:3.12-slim
+                env:
+                  - name: DATA_PATH
+                    value: ${DATA_PATH}
+                  - name: BUCKET_NAME
+                    value: ${BUCKET_NAME}
+                  - name: PROJECT_ID
+                    value: ${GCP_PROJECT_ID}
+                  - name: MODEL_SECRET_KEY
+                    value: ${MODEL_SECRET_KEY}
+                  - name: COMMIT_SHA
+                    value: ${GITHUB_SHA}
+                  - name: TOP_FEATURES
+                    value: ${TOP_FEATURES}
+                  - name: DELAY_THRESHOLD_MINUTES
+                    value: ${DELAY_THRESHOLD_MINUTES}
+                  - name: LEARNING_RATE
+                    value: ${LEARNING_RATE}
+                  - name: MODEL_PATH
+                    value: ${MODEL_PATH}
+                  - name: RANDOM_STATE
+                    value: ${RANDOM_STATE}
+              pythonPackageSpec:
+                executorImageUri: python:3.12-slim
+                pythonModule: challenge.model_train
+                localPackagePath: .
+          EOF
+
           gcloud ai custom-jobs create \
-            --project="${{ vars.GCP_PROJECT_ID }}" \
-            --region="${{ vars.GCP_REGION }}" \
-            --display-name="ct-onnx-train-${{ github.run_id }}" \
+            --project="${GCP_PROJECT_ID}" \
+            --region="${GCP_REGION}" \
+            --display-name="ct-onnx-train-${GITHUB_RUN_ID}" \
             --labels=env=dev,workflow=continuous-training \
-            --worker-pool-spec="""
-            [
-              {
-                "machine_spec": {
-                  "machine_type": "n1-highmem-2"
-                },
-                "replica_count": 1,
-                "container_spec": {
-                  "image_uri": "python:3.12-slim",
-                  "env": [
-                    {"name": "DATA_PATH", "value": "${{ vars.DATA_PATH }}"},
-                    {"name": "BUCKET_NAME", "value": "${{ vars.BUCKET_NAME }}"},
-                    {"name": "PROJECT_ID", "value": "${{ vars.GCP_PROJECT_ID }}"},
-                    {"name": "MODEL_SECRET_KEY", "value": "${{ secrets.MI_API_SECRET }}"},
-                    {"name": "COMMIT_SHA", "value": "${{ github.sha }}"},
-                    {"name": "TOP_FEATURES", "value": "${{ vars.TOP_FEATURES }}"},
-                    {"name": "DELAY_THRESHOLD_MINUTES", "value": "${{ vars.DELAY_THRESHOLD_MINUTES }}"},
-                    {"name": "LEARNING_RATE", "value": "${{ vars.LEARNING_RATE }}"},
-                    {"name": "MODEL_PATH", "value": "${{ vars.MODEL_PATH }}"},
-                    {"name": "RANDOM_STATE", "value": "${{ vars.RANDOM_STATE }}"}
-                  ]
-                },
-                "python_package_spec": {
-                  "executor_image_uri": "python:3.12-slim",
-                  "package_uris": [],
-                  "python_module": "challenge.model_train",
-                  "local_package_path": "./"
-                }
-              }
-            ]
-            """
+            --config=job.yaml
