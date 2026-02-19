@@ -1,58 +1,145 @@
 import pandas as pd
-
+import numpy as np
+import os
+from dotenv import load_dotenv
 from typing import Tuple, Union, List
+
+from sklearn.linear_model import LogisticRegression
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
+
 
 class DelayModel:
 
-    def __init__(
-        self
-    ):
-        self._model = None # Model should be saved in this attribute.
+    def __init__(self):
+        load_dotenv()
+        self._model = None
+        self._onnx_session = None
 
+        # ENV VARS
+        self.top_features = [f.strip() for f in os.getenv("TOP_FEATURES", "").split(",") if f.strip()]
+        self.delay_threshold = int(os.getenv("DELAY_THRESHOLD_MINUTES"))
+        self.model_path = os.getenv("MODEL_PATH")
+        self.random_state = int(os.getenv("RANDOM_STATE"))
+        self.model_version = os.getenv("MODEL_VERSION")
+
+    # ==========================
+    # Preprocesamiento
+    # ==========================
     def preprocess(
         self,
         data: pd.DataFrame,
         target_column: str = None
-    ) -> Union(Tuple[pd.DataFrame, pd.DataFrame], pd.DataFrame):
-        """
-        Prepare raw data for training or predict.
+    ) -> Union[Tuple[pd.DataFrame, pd.DataFrame], pd.DataFrame]:
 
-        Args:
-            data (pd.DataFrame): raw data.
-            target_column (str, optional): if set, the target is returned.
+        features = pd.concat([
+            pd.get_dummies(data["OPERA"], prefix="OPERA"),
+            pd.get_dummies(data["TIPOVUELO"], prefix="TIPOVUELO"),
+            pd.get_dummies(data["MES"], prefix="MES"),
+        ], axis=1)
 
-        Returns:
-            Tuple[pd.DataFrame, pd.DataFrame]: features and target.
-            or
-            pd.DataFrame: features.
-        """
-        return
+        # asegurar todas las top_features
+        for col in self.top_features:
+            if col not in features.columns:
+                features[col] = 0
 
-    def fit(
-        self,
-        features: pd.DataFrame,
-        target: pd.DataFrame
-    ) -> None:
-        """
-        Fit model with preprocessed data.
+        features = features[self.top_features]
 
-        Args:
-            features (pd.DataFrame): preprocessed data.
-            target (pd.DataFrame): target.
-        """
-        return
+        if target_column == "delay":
+            data["Fecha-O"] = pd.to_datetime(data["Fecha-O"])
+            data["Fecha-I"] = pd.to_datetime(data["Fecha-I"])
 
-    def predict(
-        self,
-        features: pd.DataFrame
-    ) -> List[int]:
-        """
-        Predict delays for new flights.
+            data["min_diff"] = (
+                (data["Fecha-O"] - data["Fecha-I"]).dt.total_seconds() / 60
+            )
 
-        Args:
-            features (pd.DataFrame): preprocessed data.
-        
-        Returns:
-            (List[int]): predicted targets.
-        """
-        return
+            data["delay"] = np.where(
+                data["min_diff"] > self.delay_threshold, 1, 0
+            )
+
+            target = data[[target_column]]
+            return features, target
+
+        return features
+
+    # ==========================
+    # Entrenamiento
+    # ==========================
+    def fit(self, features: pd.DataFrame, target: pd.DataFrame) -> None:
+        self._model = LogisticRegression(
+            class_weight="balanced",
+            random_state=self.random_state,
+            max_iter=1000,
+            solver="lbfgs"
+        )
+
+        self._model.fit(features, target.values.ravel())
+
+    # ==========================
+    # Predicción
+    # ==========================
+    def predict(self, features: pd.DataFrame) -> List[int]:
+        # Si hay una sesion ONNX
+        if self._onnx_session is not None:
+            input_name = self._onnx_session.get_inputs()[0].name
+            output_name = self._onnx_session.get_outputs()[0].name
+            preds = self._onnx_session.run(
+                [output_name],
+                {input_name: features.astype(np.float32).values}
+            )
+            return preds[0].tolist()
+
+        # Si hay un modelo sklearn
+        if self._model is not None:
+            return self._model.predict(features).tolist()
+
+        # Intentar cargar ONNX
+        try:
+            self.load_model(self.model_path)  
+            return self.predict(features)  # recursivo para cargar la sesion
+        except FileNotFoundError:
+            raise RuntimeError("No hay ningun modelo cargado para realizar predicciones")
+
+    # ==========================
+    # Guardar modelo ONNX
+    # ==========================
+    def save_model(self, filepath: str = None) -> None:
+        if self._model is None:
+            return
+
+        path = filepath or self.model_path
+
+        initial_type = [
+            ("float_input", FloatTensorType([None, len(self.top_features)]))
+        ]
+
+        onnx_model = convert_sklearn(
+            self._model,
+            initial_types=initial_type
+        )
+
+        onnx_model.doc_string = "Delay Prediction Model - LATAM Airlines"
+
+        meta_v = onnx_model.metadata_props.add()
+        meta_v.key = "version"
+        meta_v.value = str(self.model_version)
+
+        meta_thr = onnx_model.metadata_props.add()
+        meta_thr.key = "delay_threshold_minutes"
+        meta_thr.value = str(self.delay_threshold)
+
+        with open(path, "wb") as f:
+            f.write(onnx_model.SerializeToString())
+
+    # ==========================
+    # Cargar modelo ONNX
+    # ==========================
+    def load_model(self, filepath: str = None) -> None:
+        import onnxruntime as onnx_rt
+
+        path = filepath or self.model_path
+
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Modelo no encontrado: {path}")
+
+        self._onnx_session = onnx_rt.InferenceSession(path)
