@@ -17,8 +17,8 @@ jobs:
     
     environment: DEV
     runs-on: ubuntu-latest
-    container:
-      image: python:3.12-slim
+    # container:
+    #   image: python:3.12-slim
       
     permissions:
       contents: read
