@@ -56,3 +56,9 @@ jobs:
           PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           MODEL_SECRET_KEY: ${{ secrets.MI_API_SECRET }}
           COMMIT_SHA: ${{ github.sha }}
+          DATA_PATH: ${{ vars.BUCKET_NAME }}
+          TOP_FEATURES: ${{ vars.TOP_FEATURES }}
+          DELAY_THRESHOLD_MINUTES: ${{ vars.DELAY_THRESHOLD_MINUTES }}
+          LEARNING_RATE: ${{ vars.EARNING_RAT }}
+          MODEL_PATH: ${{ vars.MODEL_PATH }}
+          RANDOM_STATE: ${{ vars.RANDOM_STATE }}
