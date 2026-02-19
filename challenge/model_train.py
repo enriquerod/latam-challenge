@@ -6,8 +6,8 @@ from model import DelayModel
 def main():
     BUCKET_NAME = os.getenv("BUCKET_NAME") 
     COMMIT_SHA = os.getenv("COMMIT_SHA")
-    DATA_PATH = "data/data.csv" # Ruta relativa 
-    LOCAL_MODEL_PATH = "delay_model.onnx"
+    DATA_PATH = os.getenv("DATA_PATH")
+    LOCAL_MODEL_PATH = os.getenv("MODEL_LOCAL_PATH")
 
     print(f"Iniciando Pipeline de Entrenamiento para el commit {COMMIT_SHA}...")
     
