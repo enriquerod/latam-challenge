@@ -11,17 +11,46 @@ from skl2onnx.common.data_types import FloatTensorType
 
 class DelayModel:
 
-    def __init__(self):
+    def __init__(
+        self, 
+        top_features: List[str] = None, 
+        delay_threshold: int = None, 
+        random_state: int = None, 
+        model_version: str = None
+    ):
+        # Cargamos el .env para las pruebas locales 
         load_dotenv()
+        
         self._model = None
         self._onnx_session = None
 
-        # ENV VARS
-        self.top_features = [f.strip() for f in os.getenv("TOP_FEATURES", "").split(",") if f.strip()]
-        self.delay_threshold = int(os.getenv("DELAY_THRESHOLD_MINUTES"))
+        # ==========================================
+        # Args y env vars
+        # ==========================================
+        if top_features is not None:
+            self.top_features = top_features
+        else:
+            env_tf = os.getenv("TOP_FEATURES", "")
+            self.top_features = [f.strip() for f in env_tf.split(",") if f.strip()]
+
+        if delay_threshold is not None:
+            self.delay_threshold = delay_threshold
+        else:
+            self.delay_threshold = int(os.getenv("DELAY_THRESHOLD_MINUTES", 15))
+
+        if random_state is not None:
+            self.random_state = random_state
+        else:
+            self.random_state = int(os.getenv("RANDOM_STATE", 1))
+
+        if model_version is not None:
+            self.model_version = model_version
+        else:
+            self.model_version = os.getenv("MODEL_VERSION", "1.0")
+
+        # El path se define al guardar o cargar el modelo
         self.model_path = os.getenv("MODEL_PATH")
-        self.random_state = int(os.getenv("RANDOM_STATE"))
-        self.model_version = os.getenv("MODEL_VERSION")
+
 
     # ==========================
     # Preprocesamiento
@@ -39,11 +68,11 @@ class DelayModel:
         ], axis=1)
 
         # asegurar todas las top_features
-        for col in self.top_features:
-            if col not in features.columns:
-                features[col] = 0
-
-        features = features[self.top_features]
+        if self.top_features:
+            for col in self.top_features:
+                if col not in features.columns:
+                    features[col] = 0
+            features = features[self.top_features]
 
         if target_column == "delay":
             data["Fecha-O"] = pd.to_datetime(data["Fecha-O"])
@@ -94,11 +123,14 @@ class DelayModel:
             return self._model.predict(features).tolist()
 
         # Intentar cargar ONNX
-        try:
-            self.load_model(self.model_path)  
-            return self.predict(features)  # recursivo para cargar la sesion
-        except FileNotFoundError:
-            raise RuntimeError("No hay ningun modelo cargado para realizar predicciones")
+        if self.model_path:
+            try:
+                self.load_model(self.model_path)  
+                return self.predict(features)  # recursivo para cargar la sesion
+            except FileNotFoundError:
+                pass
+                
+        raise RuntimeError("No hay ningun modelo cargado para realizar predicciones")
 
     # ==========================
     # Guardar modelo ONNX
@@ -109,8 +141,10 @@ class DelayModel:
 
         path = filepath or self.model_path
 
+        num_features = len(self.top_features) if self.top_features else self._model.n_features_in_
+
         initial_type = [
-            ("float_input", FloatTensorType([None, len(self.top_features)]))
+            ("float_input", FloatTensorType([None, num_features]))
         ]
 
         onnx_model = convert_sklearn(
