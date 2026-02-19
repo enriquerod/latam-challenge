@@ -1,12 +1,18 @@
 import pandas as pd
 import numpy as np
-import xgboost as xgb
 import os
+from dotenv import load_dotenv
 from typing import Tuple, Union, List
+
+from sklearn.linear_model import LogisticRegression
+from skl2onnx import convert_sklearn
+from skl2onnx.common.data_types import FloatTensorType
+
 
 class DelayModel:
 
     def __init__(self):
+        load_dotenv()
         self._model = None
         self._onnx_session = None
 
@@ -14,7 +20,6 @@ class DelayModel:
         self.top_features = [f.strip() for f in os.getenv("TOP_FEATURES", "").split(",") if f.strip()]
         self.delay_threshold = int(os.getenv("DELAY_THRESHOLD_MINUTES"))
         self.model_path = os.getenv("MODEL_PATH")
-        self.learning_rate = float(os.getenv("LEARNING_RATE"))
         self.random_state = int(os.getenv("RANDOM_STATE"))
         self.model_version = os.getenv("MODEL_VERSION")
 
@@ -33,6 +38,7 @@ class DelayModel:
             pd.get_dummies(data["MES"], prefix="MES"),
         ], axis=1)
 
+        # asegurar todas las top_features
         for col in self.top_features:
             if col not in features.columns:
                 features[col] = 0
@@ -60,53 +66,46 @@ class DelayModel:
     # Entrenamiento
     # ==========================
     def fit(self, features: pd.DataFrame, target: pd.DataFrame) -> None:
-        n_y0 = len(target[target.iloc[:, 0] == 0])
-        n_y1 = len(target[target.iloc[:, 0] == 1])
-        scale = n_y0 / n_y1 if n_y1 > 0 else 1.0
-
-        self._model = xgb.XGBClassifier(
+        self._model = LogisticRegression(
+            class_weight="balanced",
             random_state=self.random_state,
-            learning_rate=self.learning_rate,
-            scale_pos_weight=scale,
-            eval_metric="logloss"
+            max_iter=1000,
+            solver="lbfgs"
         )
 
-        self._model.fit(features, target)
+        self._model.fit(features, target.values.ravel())
 
     # ==========================
     # Predicción
     # ==========================
     def predict(self, features: pd.DataFrame) -> List[int]:
-
+        # Si hay una sesion ONNX
         if self._onnx_session is not None:
             input_name = self._onnx_session.get_inputs()[0].name
             output_name = self._onnx_session.get_outputs()[0].name
-            input_data = features.astype(np.float32).values
-
             preds = self._onnx_session.run(
                 [output_name],
-                {input_name: input_data}
+                {input_name: features.astype(np.float32).values}
             )
             return preds[0].tolist()
 
+        # Si hay un modelo sklearn
         if self._model is not None:
             return self._model.predict(features).tolist()
 
-        # TODO: despues cargar desde  gcp bucket
-        if self._onnx_session is not None:
-            return self.predict(features)
-        
-        raise RuntimeError("No hay ningún modelo cargado para realizar predicciones")
+        # Intentar cargar ONNX
+        try:
+            self.load_model(self.model_path)  
+            return self.predict(features)  # recursivo para cargar la sesion
+        except FileNotFoundError:
+            raise RuntimeError("No hay ningun modelo cargado para realizar predicciones")
 
     # ==========================
-    # MODELO PARA ARTEFACTO
+    # Guardar modelo ONNX
     # ==========================
     def save_model(self, filepath: str = None) -> None:
         if self._model is None:
             return
-
-        import onnxmltools
-        from onnxmltools.convert.common.data_types import FloatTensorType
 
         path = filepath or self.model_path
 
@@ -114,12 +113,11 @@ class DelayModel:
             ("float_input", FloatTensorType([None, len(self.top_features)]))
         ]
 
-        onnx_model = onnxmltools.convert_xgboost(
+        onnx_model = convert_sklearn(
             self._model,
             initial_types=initial_type
         )
 
-        # onnx_model.model_version = 1
         onnx_model.doc_string = "Delay Prediction Model - LATAM Airlines"
 
         meta_v = onnx_model.metadata_props.add()
@@ -129,11 +127,13 @@ class DelayModel:
         meta_thr = onnx_model.metadata_props.add()
         meta_thr.key = "delay_threshold_minutes"
         meta_thr.value = str(self.delay_threshold)
-        
-         # TODO: despues subir a gcp bucket
-        onnxmltools.utils.save_model(onnx_model, path)
 
-     # TODO: despues cargar desde  gcp bucket
+        with open(path, "wb") as f:
+            f.write(onnx_model.SerializeToString())
+
+    # ==========================
+    # Cargar modelo ONNX
+    # ==========================
     def load_model(self, filepath: str = None) -> None:
         import onnxruntime as onnx_rt
 
