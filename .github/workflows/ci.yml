@@ -19,7 +19,7 @@ env:
   MODEL_LOCAL_PATH: ${{ vars.MODEL_LOCAL_PATH }}
 
 jobs:
-  trigger-training:
+  trigger-CI:
     # La condición estricta: Solo si fue merged y viene de una rama feature/
     if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'feature/')
     
