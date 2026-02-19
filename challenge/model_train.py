@@ -24,7 +24,7 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-    # 1. Capturamos los argumentos de línea de comandos en lugar de os.getenv
+
     args = parse_args()
     
     BUCKET_NAME = args.bucket_name
@@ -37,7 +37,7 @@ def main():
 
     print(f"Iniciando Pipeline de Entrenamiento para el commit {COMMIT_SHA}...")
     
-    # 2. Verificar si el archivo de datos existe
+    # Verificar si el archivo de datos existe
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"No se encontró el dataset en {DATA_PATH}")
 
@@ -52,7 +52,7 @@ def main():
     print("Guardando modelo localmente en ONNX...")
     model.save_model(LOCAL_MODEL_PATH)
 
-    # 3. Subida a Google Cloud Storage
+    # Subida a Google Cloud Storage
     print(f"Subiendo a bucket {BUCKET_NAME}...")
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
@@ -64,4 +64,7 @@ def main():
     print("Proceso completado con éxito.")
 
 if __name__ == "__main__":
+    current_dir = os.getcwd()
+    print(f"Directorio actual de trabajo (CWD): {current_dir}")
+    print(f"Archivos en {current_dir}: {os.listdir(current_dir)}")
     main()
