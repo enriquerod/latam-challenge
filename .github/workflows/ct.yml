@@ -40,6 +40,10 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v1
 
+      - name: Configure Docker for GCP
+        run: |
+          gcloud auth configure-docker us-east1-docker.pkg.dev --quiet
+
       - name: Submit Custom Job to Vertex AI
         run: |
           gcloud ai custom-jobs create \
