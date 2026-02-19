@@ -1,7 +1,0 @@
-name: 'Continuous Training'
-
-on:
-  ...
-
-jobs:
-  ...

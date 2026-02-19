@@ -1,58 +1,38 @@
 import pandas as pd
 import os
-from dotenv import load_dotenv
 from google.cloud import storage
 from model import DelayModel
-from sklearn.metrics import accuracy_score, classification_report
-
-BUCKET_NAME = os.getenv("BUCKET_NAME") 
-COMMIT_SHA = os.getenv("COMMIT_SHA")
-DATA_PATH = "data/data.csv"
-LOCAL_MODEL_PATH = "/tmp/delay_model.onnx"
 
 def main():
-    print("Iniciando Pipeline de Entrenamiento...")
-    data = pd.read_csv('../data/data.csv')
+    BUCKET_NAME = os.getenv("BUCKET_NAME") 
+    COMMIT_SHA = os.getenv("COMMIT_SHA")
+    DATA_PATH = "data/data.csv" # Ruta relativa 
+    LOCAL_MODEL_PATH = "delay_model.onnx"
+
+    print(f"Iniciando Pipeline de Entrenamiento para el commit {COMMIT_SHA}...")
+    
+    # Verificar si el archivo de datos existe
+    if not os.path.exists(DATA_PATH):
+        raise FileNotFoundError(f"No se encontró el dataset en {DATA_PATH}")
+
+    data = pd.read_csv(DATA_PATH)
     model = DelayModel()
     
-    print("Generando features...")
+    print("Generando features y entrenando...")
     features, target = model.preprocess(data, target_column="delay")
-    
-    print("Entrenando XGBoost...")
     model.fit(features, target)
     
-    print("Conversion a ONNX...")
-    model.save_model('./delay_model.onnx')
+    print("Guardando modelo localmente en ONNX...")
+    model.save_model(LOCAL_MODEL_PATH)
 
-    # TEST RAPIDO 
-    print("Verificando predicciones ONNX...")
-    test_model = DelayModel()
-    test_model.model_path = "./delay_model.onnx" 
-    test_model.load_model()            
-
-    # metadatos
-    meta = test_model._onnx_session.get_modelmeta()
-    print("=== Metadatos ONNX ===")
-    print(f"Producer name: {meta.producer_name}")
-    print(f"Description: {meta.description}")
-    print(f"Version: {meta.version}")
-    print("Propiedades adicionales:")
-    keys = meta.custom_metadata_map.keys()
-    for key in keys:
-        value = meta.custom_metadata_map[key]
-        print(f"  {key}: {value}")
-
-    # Predicciones
-    predictions = test_model.predict(features)
-
-    true_values = target.values.ravel().tolist()
-    accuracy = accuracy_score(true_values, predictions)
-    report = classification_report(true_values, predictions, digits=3)
-
-    print(f"Accuracy sobre dataset: {accuracy:.3f}")
-    print("Reporte completo:")
-    print(report)
+    # Subida a Google Cloud Storage
+    print(f"Subiendo a bucket {BUCKET_NAME}...")
+    client = storage.Client()
+    bucket = client.bucket(BUCKET_NAME)
+    # Guardamos con el SHA para tener versionamiento
+    blob = bucket.blob(f"models/model_{COMMIT_SHA}.onnx")
+    blob.upload_from_filename(LOCAL_MODEL_PATH)
+    print("Proceso completado")
 
 if __name__ == "__main__":
-    load_dotenv()
     main()
