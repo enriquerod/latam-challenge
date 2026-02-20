@@ -85,9 +85,14 @@ El orquestador maestro en GitHub Actions coordina las tres piezas clave:
    - Despliega la aplicación en Cloud Run, inyectando las variables de entorno correspondientes al proyecto (dev/test/prod) y descargando dinámicamente el modelo `.onnx`.
 
 
+<span style="color:red; font-size:24px; font-weight:bold;">
+  MEJORAS
+</span>
 
-
-### Con mas tiempo se hubiera implementaod Infraestructura como Código (IaC) con Terraform
+- **Terminar de hacer el unit test para cumplir coverage**
+- **PRacticas de seguridad en los servicios de GCP**
+- **Implementar pipelines de seguridad para escaneo de codigo y de imagenes docker**
+- **Infraestructura como Código (IaC) con Terraform**
 
 
 
