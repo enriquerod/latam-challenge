@@ -1,0 +1,110 @@
+name: Continuous Deployment
+
+on:
+  pull_request:
+    branches: [develop,  'release/*', main]
+    types: [closed] 
+
+env:
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ vars.GCP_REGION }}
+  ARTIFACT_REGISTRY: ${{ vars.ARTIFACT_REGISTRY }} 
+  GCS_MODELS_BUCKET: ${{ vars.BUCKET_NAME }}
+
+jobs:
+  deploy-and-test:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write # Requerido para autenticación segura con GCP
+
+    environment: 
+      name: ${{ github.ref == 'refs/heads/main' && 'PROD' || startsWith(github.ref, 'refs/heads/release/') && 'TEST' || 'DEV' }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set dynamic service variables
+        id: set-vars
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "SERVICE_NAME=delay-api-prod" >> $GITHUB_ENV
+            echo "RUN_STRESS=false" >> $GITHUB_ENV
+          elif [[ "${{ github.ref }}" == refs/heads/release/* ]]; then
+            echo "SERVICE_NAME=delay-api-test" >> $GITHUB_ENV
+            echo "RUN_STRESS=true" >> $GITHUB_ENV
+          else
+            echo "SERVICE_NAME=delay-api-dev" >> $GITHUB_ENV
+            echo "RUN_STRESS=false" >> $GITHUB_ENV
+          fi
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ vars.GCP_REGION }}-docker.pkg.dev
+
+      - name: Download ONNX Model from GCS
+        run: |
+          echo "Buscando el artefacto ONNX mas reciente (FIX LATER)"
+          LATEST_MODEL_URI=$(gsutil ls -l "gs://${{ env.GCS_MODELS_BUCKET }}/models/**/delay_model.onnx" | sort -k 2 | tail -n 2 | head -n 1 | awk '{print $3}')
+          
+          echo "model path: $LATEST_MODEL_URI"
+          if [ -z "$LATEST_MODEL_URI" ]; then
+            echo "Error: No se encontro ningun archivo delay_model.onnx en el bucket"
+            exit 1
+          fi
+
+          gsutil cp $LATEST_MODEL_URI ./delay_model.onnx
+          
+          if [ ! -f delay_model.onnx ]; then
+            echo "Error: la descarga del artefacto fallo"
+            exit 1
+          fi
+
+      - name: Build and Push Docker image
+        run: |
+          IMAGE_PATH="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/api"
+          
+          # Etiquetamos con el SHA (inmutabilidad) y el nombre del ambiente
+          docker build -t $IMAGE_PATH:${{ github.sha }} -t $IMAGE_PATH:${{ env.SERVICE_NAME }} .
+          docker push --all-tags $IMAGE_PATH
+
+      - name: Deploy to Cloud Run
+        run: |
+          IMAGE_PATH="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/api:${{ github.sha }}"
+          
+          cat <<EOF > env_vars.yaml
+          TOP_FEATURES: "${{ vars.TOP_FEATURES }}"
+          DELAY_THRESHOLD_MINUTES: "${{ vars.DELAY_THRESHOLD_MINUTES }}"
+          MODEL_VERSION: "${{ vars.MODEL_VERSION }}"
+          EOF
+          
+          LIVE_URL=$(gcloud run deploy ${{ env.SERVICE_NAME }} \
+            --image $IMAGE_PATH \
+            --region ${{ env.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated \
+            --memory 1Gi \
+            --cpu 1 \
+            --concurrency 80 \
+            --max-instances 10 \
+            --env-vars-file env_vars.yaml \
+            --format="value(status.url)")
+            
+          echo "LIVE_URL=$LIVE_URL" >> $GITHUB_ENV
+          echo "API desplegada exitosamente en: $LIVE_URL"
+
+      - name: Run Stress Test
+        if: env.RUN_STRESS == 'true'
+        run: |
+          echo "Iniciando pruebas de stress contra $LIVE_URL"
+          sed -i "26s|.*|API_URL := ${{ env.LIVE_URL }}|" Makefile
+          make stress-test
