@@ -108,7 +108,7 @@ class DelayModel:
     # Predicción
     # ==========================
     def predict(self, features: pd.DataFrame) -> List[int]:
-        # Si hay una sesion ONNX
+        # 1. Prioridad: ONNX
         if self._onnx_session is not None:
             input_name = self._onnx_session.get_inputs()[0].name
             output_name = self._onnx_session.get_outputs()[0].name
@@ -118,19 +118,11 @@ class DelayModel:
             )
             return preds[0].tolist()
 
-        # Si hay un modelo sklearn
+        # 2. Secundario: Sklearn
         if self._model is not None:
             return self._model.predict(features).tolist()
 
-        # Intentar cargar ONNX
-        if self.model_path:
-            try:
-                self.load_model(self.model_path)  
-                return self.predict(features)  # recursivo para cargar la sesion
-            except FileNotFoundError:
-                pass
-                
-        raise RuntimeError("No hay ningun modelo cargado para realizar predicciones")
+        raise RuntimeError("Error: El modelo no ha sido cargado. Verifique la inicialización de la API")
 
     # ==========================
     # Guardar modelo ONNX
