@@ -82,3 +82,30 @@ async def post_predict(payload: FlightList) -> dict:
     predictions = model.predict(features)
     
     return {"predict": predictions}
+
+
+@app.get("/version", status_code=200)
+async def get_version() -> dict:
+    """
+    Retorna la metadata embebida directamente en el archivo ONNX cargado.
+    """
+    # Verificamos que la sesión ONNX esté activa en el modelo
+    if not hasattr(model, "_onnx_session") or model._onnx_session is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "detail": "El modelo ONNX no está cargado o disponible."}
+        )
+
+    # Extraemos la metadata nativa de ONNX
+    meta = model._onnx_session.get_modelmeta()
+    
+    return {
+        "status": "OK",
+        "onnx_metadata": {
+            "producer_name": meta.producer_name,
+            "graph_name": meta.graph_name,
+            "version": meta.version,
+            "description": meta.description,
+            "custom_metadata": meta.custom_metadata_map # Aquí vienen los props personalizados
+        }
+    }
