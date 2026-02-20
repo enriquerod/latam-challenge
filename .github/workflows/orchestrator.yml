@@ -5,6 +5,10 @@ on:
     branches: [develop, 'release/*', main]
     types: [closed]
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   # ==========================================
   # 1. SETUP: Determinar Ambiente
@@ -49,7 +53,7 @@ jobs:
     secrets: inherit
 
   # ==========================================
-  # 4. RUN CD (Todos los ambientes)
+  # 4. RUN CD (Todos los ambientes) + Stress en DEV y TEST
   # ==========================================
   run-cd:
     needs: [setup-env, run-ci, run-ct]
