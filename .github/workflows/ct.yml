@@ -11,16 +11,19 @@ jobs:
   execute-ct:
     runs-on: ubuntu-latest
     
+    # IMPORTANTE: Permisos para que el token pueda escribir el commit en el repo
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
-    # 1. Cargamos el entorno dinámico (DEV, TEST, PROD) 
     environment: ${{ inputs.env_name }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+        with:
+          # Desactivamos persistencia para usar el token de escritura manualmente al final
+          persist-credentials: false
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -33,12 +36,12 @@ jobs:
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker gcr.io --quiet
 
-      # Construccion de argumentos 
-      - name: Submit Custom Job to Vertex AI
+      - name: Submit and Wait for Vertex AI Job
+        id: vertex-job
         run: |
           ENV_LOWER=$(echo "${{ inputs.env_name }}" | tr '[:upper:]' '[:lower:]')
-
           SAFE_TOP_FEATURES=$(echo "${{ vars.TOP_FEATURES }}" | tr ',' '|')
+          JOB_NAME="ct-onnx-train-${{ github.sha }}"
 
           JOB_ARGS="--data_path=${{ vars.DATA_PATH }}"
           JOB_ARGS="$JOB_ARGS,--bucket_name=${{ vars.BUCKET_NAME }}"
@@ -50,28 +53,61 @@ jobs:
           JOB_ARGS="$JOB_ARGS,--random_state=${{ vars.RANDOM_STATE }}"
           JOB_ARGS="$JOB_ARGS,--top_features=$SAFE_TOP_FEATURES"
 
-          echo "Lanzando Job en Vertex AI para ambiente: $ENV_LOWER"
+          echo "Lanzando Custom Job en Vertex AI: $JOB_NAME"
 
-          gcloud ai custom-jobs create \
+          # 3. Lanzamos el Job y capturamos su Resource Name (ID)
+          RAW_JOB_ID=$(gcloud ai custom-jobs create \
             --project="${{ vars.GCP_PROJECT_ID }}" \
             --region="${{ vars.GCP_REGION }}" \
-            --display-name="ct-onnx-train-${{ github.sha }}" \
+            --display-name="$JOB_NAME" \
             --labels=env=$ENV_LOWER,workflow=continuous-training \
             --worker-pool-spec="machine-type=n1-highmem-2,replica-count=1,executor-image-uri=python:3.12-slim,local-package-path=./,script=challenge/model_train.py,extra-dirs=data;tests" \
-            --args="$JOB_ARGS"
+            --args="$JOB_ARGS" \
+            --format="value(name)")
+          
+          echo "Job ID creado: $RAW_JOB_ID"
 
-      # Auto-actualizacion de la version del modelo
+          echo "Monitoreando estado del entrenamiento..."
+          while true; do
+            STATUS=$(gcloud ai custom-jobs describe $RAW_JOB_ID \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --region="${{ vars.GCP_REGION }}" \
+              --format="value(state)")
+            
+            echo "Estado actual: $STATUS"
+
+            if [[ "$STATUS" == "JOB_STATE_SUCCEEDED" ]]; then
+              echo "Entrenamiento finalizado con exito."
+              break
+            elif [[ "$STATUS" == "JOB_STATE_FAILED" || "$STATUS" == "JOB_STATE_CANCELLED" || "$STATUS" == "JOB_STATE_ERROR" ]]; then
+              echo "El entrenamiento fallo en Vertex AI."
+              exit 1
+            fi
+
+            sleep 45 # Esperamos 45 segundos entre chequeos
+          done
+
       - name: Update model_config.json and Push to Repo
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "Actualizando model_config.json con el SHA: ${{ github.sha }}"
+          echo "Actualizando model_config.json con SHA: ${{ github.sha }}"
           
+          # Modificamos el JSON
           jq --arg sha "${{ github.sha }}" '.MODEL_VERSION = $sha' model_config.json > tmp.json && mv tmp.json model_config.json
           
+          # Configuracion de Git con el actor real del PR
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
           
           git add model_config.json
-          git commit -m "actualiza MODEL_VERSION a ${{ github.sha }} [skip ci]" || echo "No hay cambios que commitear"
-          git push
+          
+          # Solo hacemos commit si hubo cambios reales
+          if git diff --staged --quiet; then
+            echo "No hay cambios en model_config.json, saltando commit."
+          else
+            git commit -m "chore(mlops): actualiza MODEL_VERSION a ${{ github.sha }} [skip ci]"
+            
+            echo "Haciendo push del cambio de version..."
+            git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref_name }}
+          fi

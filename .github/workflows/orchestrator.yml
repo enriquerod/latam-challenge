@@ -57,7 +57,7 @@ jobs:
   # ==========================================
   run-cd:
     needs: [setup-env, run-ci, run-ct]
-    # La magia: Corre si CI paso bien y acepta que CT haya pasado en DEV o haya sido saltado en TEST/PROD
+    # Solo si el entrenamiento (CT) fue exitoso o se saltó (en caso de TEST/PROD)
     if: always() && needs.run-ci.result == 'success' && (needs.run-ct.result == 'success' || needs.run-ct.result == 'skipped')
     uses: ./.github/workflows/cd.yml
     with:
