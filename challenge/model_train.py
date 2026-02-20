@@ -1,72 +1,67 @@
 import argparse
 import pandas as pd
 import os
+import sys
 from google.cloud import storage
-from model import DelayModel
+
+
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.getcwd())
+
+try:
+    from challenge.model import DelayModel
+except ModuleNotFoundError:
+    from model import DelayModel
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Pipeline de Entrenamiento de Atrasos")
-    
-    # Argumentos principales usados en el flujo actual
-    parser.add_argument('--data_path', type=str, required=True, help="Ruta local al dataset")
-    parser.add_argument('--bucket_name', type=str, required=True, help="Nombre del bucket en GCS")
-    parser.add_argument('--commit_sha', type=str, required=True, help="SHA del commit para versionamiento")
-    parser.add_argument('--model_path', type=str, required=True, help="Ruta local para guardar el modelo ONNX")
-    
-    # Argumentos extra mapeados desde GitHub Actions (listos para usarse si DelayModel los requiere)
+    parser.add_argument('--data_path', type=str, required=True)
+    parser.add_argument('--bucket_name', type=str, required=True)
+    parser.add_argument('--commit_sha', type=str, required=True)
+    parser.add_argument('--model_path', type=str, required=True)
     parser.add_argument('--project_id', type=str, required=False)
-    parser.add_argument('--model_secret_key', type=str, required=False, default="")
     parser.add_argument('--delay_threshold_minutes', type=int, required=False, default=15)
     parser.add_argument('--learning_rate', type=float, required=False, default=0.01)
     parser.add_argument('--random_state', type=int, required=False, default=1)
     parser.add_argument('--top_features', type=str, required=False, default="")
-
     return parser.parse_args()
 
 def main():
-
     args = parse_args()
     
-    BUCKET_NAME = args.bucket_name
-    COMMIT_SHA = args.commit_sha
-    DATA_PATH = args.data_path
-    LOCAL_MODEL_PATH = args.model_path
+    # Procesar features (Separador '|')
+    top_features_list = [f.strip() for f in args.top_features.split('|') if f.strip()]
 
-    # Deshacemos el truco del pipe (|) por si necesitas filtrar las columnas en el futuro
-    top_features_list = args.top_features.split('|') if args.top_features else []
-
-    print(f"Iniciando Pipeline de Entrenamiento para el commit {COMMIT_SHA}...")
+    print(f"Iniciando Entrenamiento. Features: {len(top_features_list)}")
     
-    # Verificar si el archivo de datos existe
-    if not os.path.exists(DATA_PATH):
-        raise FileNotFoundError(f"No se encontró el dataset en {DATA_PATH}")
+    if not os.path.exists(args.data_path):
+        raise FileNotFoundError(f"No hay data en {args.data_path}")
 
-    data = pd.read_csv(DATA_PATH)
-    model = DelayModel()
+    data = pd.read_csv(args.data_path)
+
+    # Instanciar con las top_features para que el ONNX sea de tamaño 10
+    model = DelayModel(
+        top_features=top_features_list,
+        delay_threshold=args.delay_threshold_minutes,
+        random_state=args.random_state
+    )
     
-    print("Generando features y entrenando...")
-    # Si quisieras usar los features pasados por GitHub Actions, podrías inyectar top_features_list aquí
+    # Preprocess + Fit
     features, target = model.preprocess(data, target_column="delay")
+    print(f"Dataset final: {features.shape}")
     model.fit(features, target)
     
-    print("Guardando modelo localmente en ONNX...")
-    model.save_model(LOCAL_MODEL_PATH)
+    # Guardar local
+    model.save_model(args.model_path)
 
-    # Subida a Google Cloud Storage
-    print(f"Subiendo a bucket {BUCKET_NAME}...")
+    # Subida a GCS
     client = storage.Client()
-    bucket = client.bucket(BUCKET_NAME)
-    
-    # Vertex AI Model Registry prefiere leer de directorios (artifact_uri)
-    gcs_blob_path = f"models/{COMMIT_SHA}/delay_model.onnx"
-    
+    bucket = client.bucket(args.bucket_name)
+    gcs_blob_path = f"models/{args.commit_sha}/delay_model.onnx"
     blob = bucket.blob(gcs_blob_path)
-    blob.upload_from_filename(LOCAL_MODEL_PATH)
+    blob.upload_from_filename(args.model_path)
     
-    print(f"Modelo guardado en GCS: gs://{BUCKET_NAME}/{gcs_blob_path}")
+    print(f"Éxito. Modelo en GCS: gs://{args.bucket_name}/{gcs_blob_path}")
 
 if __name__ == "__main__":
-    current_dir = os.getcwd()
-    print(f"Directorio actual de trabajo (CWD): {current_dir}")
-    print(f"Archivos en {current_dir}: {os.listdir(current_dir)}")
     main()

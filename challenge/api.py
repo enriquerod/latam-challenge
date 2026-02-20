@@ -15,12 +15,12 @@ model = DelayModel()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        model.load_model("delay_model.onnx")
-        print("Modelo ONNX cargado en memoria")
+        # Usa la ruta absoluta o asegúrate de que el archivo exista
+        model.load_model("./delay_model.onnx") 
+        print("Modelo ONNX cargado exitosamente")
     except Exception as e:
-        print(f"No se pudo cargar el modelo ONNX, Error: {e}")
-    
-    yield # FastAPI levanta el servidor y atiende peticiones
+        print(f"ERROR CRÍTICO: No se pudo cargar el modelo: {e}")
+    yield
     
     # Logica de shutdown
     print("Apagando la API y liberando recursos")
@@ -82,3 +82,30 @@ async def post_predict(payload: FlightList) -> dict:
     predictions = model.predict(features)
     
     return {"predict": predictions}
+
+
+@app.get("/version", status_code=200)
+async def get_version() -> dict:
+    """
+    Retorna la metadata embebida directamente en el archivo ONNX cargado.
+    """
+    # Verificamos que la sesión ONNX esté activa en el modelo
+    if not hasattr(model, "_onnx_session") or model._onnx_session is None:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "detail": "El modelo ONNX no está cargado o disponible."}
+        )
+
+    # Extraemos la metadata nativa de ONNX
+    meta = model._onnx_session.get_modelmeta()
+    
+    return {
+        "status": "OK",
+        "onnx_metadata": {
+            "producer_name": meta.producer_name,
+            "graph_name": meta.graph_name,
+            "version": meta.version,
+            "description": meta.description,
+            "custom_metadata": meta.custom_metadata_map # Aquí vienen los props personalizados
+        }
+    }
