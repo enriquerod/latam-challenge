@@ -1,8 +1,9 @@
 name: Continuous Deployment
 
 on:
-  push:
-    branches: [develop, 'release/*', main]
+  pull_request:
+    branches: [develop,  'release/*', main]
+    types: [closed] 
 
 env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -55,6 +56,7 @@ jobs:
           echo "Buscando el artefacto ONNX mas reciente (FIX LATER)"
           LATEST_MODEL_URI=$(gsutil ls -l "gs://${{ env.GCS_MODELS_BUCKET }}/models/**/delay_model.onnx" | sort -k 2 | tail -n 2 | head -n 1 | awk '{print $3}')
           
+          echo "model path: $LATEST_MODEL_URI"
           if [ -z "$LATEST_MODEL_URI" ]; then
             echo "Error: No se encontro ningun archivo delay_model.onnx en el bucket"
             exit 1
