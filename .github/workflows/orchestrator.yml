@@ -1,4 +1,4 @@
-name: MLOps Master Orchestrator
+name: MLOps Orchestrator
 
 on:
   pull_request:
