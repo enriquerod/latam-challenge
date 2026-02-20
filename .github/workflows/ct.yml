@@ -1,48 +1,43 @@
 name: Continuous Training
 
 on:
-  pull_request:
-    branches: [develop]
-    types: [closed] 
-
-env:
-  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-  GCP_REGION: ${{ vars.GCP_REGION }}
-  BUCKET_NAME: ${{ vars.BUCKET_NAME }}
+  workflow_call:
+    inputs:
+      env_name:
+        required: true
+        type: string
 
 jobs:
-  trigger-training:
-    # La condición estricta: Solo si fue merged y viene de una rama feature/
-    if: github.event.pull_request.merged == true && startsWith(github.event.pull_request.head.ref, 'feature/')
-    
-    environment: DEV
+  execute-ct:
     runs-on: ubuntu-latest
-      
+    
     permissions:
       contents: read
       id-token: write
+
+    # 1. Cargamos el entorno dinámico (DEV, TEST, PROD) 
+    environment: ${{ inputs.env_name }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
       - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for GCP
         run: gcloud auth configure-docker gcr.io --quiet
 
+      # Construccion de argumentos 
       - name: Submit Custom Job to Vertex AI
         run: |
-          # 1. Limpiamos TOP_FEATURES reemplazando comas por pipes (|) para no romper el comando gcloud
           SAFE_TOP_FEATURES=$(echo "${{ vars.TOP_FEATURES }}" | tr ',' '|')
 
-          # 2. Construimos los argumentos de Python concatenando la variable sin espacios extra
           JOB_ARGS="--data_path=${{ vars.DATA_PATH }}"
           JOB_ARGS="$JOB_ARGS,--bucket_name=${{ vars.BUCKET_NAME }}"
           JOB_ARGS="$JOB_ARGS,--project_id=${{ vars.GCP_PROJECT_ID }}"
@@ -54,11 +49,27 @@ jobs:
           JOB_ARGS="$JOB_ARGS,--random_state=${{ vars.RANDOM_STATE }}"
           JOB_ARGS="$JOB_ARGS,--top_features=$SAFE_TOP_FEATURES"
 
-          # 3. Lanzamos el Job pasando toda la variable a --args
+          echo "Lanzando Job en Vertex AI con los siguientes argumentos:"
+          echo "$JOB_ARGS"
+
           gcloud ai custom-jobs create \
             --project="${{ vars.GCP_PROJECT_ID }}" \
             --region="${{ vars.GCP_REGION }}" \
             --display-name="ct-onnx-train-${{ github.run_id }}" \
-            --labels=env=dev,workflow=continuous-training \
+            --labels=env=${{ inputs.env_name }},workflow=continuous-training \
             --worker-pool-spec="machine-type=n1-highmem-2,replica-count=1,executor-image-uri=python:3.12-slim,local-package-path=./,script=challenge/model_train.py,extra-dirs=data;tests" \
             --args="$JOB_ARGS"
+
+      # Auto-actualizacion de la version del modelo
+      - name: Update model_config.json and Push to Repo
+        run: |
+          echo "Actualizando model_config.json con el SHA: ${{ github.sha }}"
+          
+          jq --arg sha "${{ github.sha }}" '.MODEL_VERSION = $sha' model_config.json > tmp.json && mv tmp.json model_config.json
+          
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          
+          git add model_config.json
+          git commit -m "actualiza MODEL_VERSION a ${{ github.sha }} [skip ci]" || echo "No hay cambios que commitear"
+          git push
