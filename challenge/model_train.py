@@ -13,9 +13,7 @@ def parse_args():
     parser.add_argument('--commit_sha', type=str, required=True, help="SHA del commit para versionamiento")
     parser.add_argument('--model_path', type=str, required=True, help="Ruta local para guardar el modelo ONNX")
     
-    # Argumentos extra mapeados desde GitHub Actions (listos para usarse si DelayModel los requiere)
     parser.add_argument('--project_id', type=str, required=False)
-    parser.add_argument('--model_secret_key', type=str, required=False, default="")
     parser.add_argument('--delay_threshold_minutes', type=int, required=False, default=15)
     parser.add_argument('--learning_rate', type=float, required=False, default=0.01)
     parser.add_argument('--random_state', type=int, required=False, default=1)
