@@ -9,7 +9,7 @@ env:
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   GCP_REGION: ${{ vars.GCP_REGION }}
   ARTIFACT_REGISTRY: ${{ vars.ARTIFACT_REGISTRY }} 
-  GCS_MODELS_BUCKET: ${{ vars.GCS_MODELS_BUCKET }}
+  GCS_MODELS_BUCKET: ${{ vars.BUCKET_NAME }}
 
 jobs:
   deploy-and-test:
