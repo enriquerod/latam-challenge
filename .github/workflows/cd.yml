@@ -88,6 +88,7 @@ jobs:
           MODEL_VERSION: "${{ env.MODEL_VERSION }}" 
           EOF
           
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
           LIVE_URL=$(gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image $IMAGE_PATH \
             --region ${{ env.GCP_REGION }} \
@@ -98,6 +99,8 @@ jobs:
             --concurrency 80 \
             --max-instances 10 \
             --env-vars-file env_vars.yaml \
+            --revision-suffix "$SHORT_SHA" \
+            --update-labels "commit-sha=${{ github.sha }}" \
             --format="value(status.url)")
             
           echo "LIVE_URL=$LIVE_URL" >> $GITHUB_ENV
