@@ -75,11 +75,37 @@ jobs:
 
           echo "Job ID detectado: $RAW_JOB_ID"
 
-          # 4. Monitoreo usando stream-logs para mayor eficiencia
-          echo "Conectando con los logs de Vertex AI..."
-          gcloud ai custom-jobs stream-logs "$RAW_JOB_ID" \
-            --project="${{ vars.GCP_PROJECT_ID }}" \
-            --region="${{ vars.GCP_REGION }}"
+          # 4. Monitoreo del estado (Polling)
+          echo "Monitoreando estado del entrenamiento (Max 20 min)..."
+          MAX_RETRIES=60
+          COUNT=0
+
+          while [ $COUNT -lt $MAX_RETRIES ]; do
+            STATUS=$(gcloud ai custom-jobs describe "$RAW_JOB_ID" \
+              --project="${{ vars.GCP_PROJECT_ID }}" \
+              --region="${{ vars.GCP_REGION }}" \
+              --format="value(state)")
+            
+            echo "[$(date +%H:%M:%S)] Estado actual: $STATUS"
+
+            if [[ "$STATUS" == "JOB_STATE_SUCCEEDED" ]]; then
+              echo "Entrenamiento finalizado con exito."
+              exit 0
+            elif [[ "$STATUS" == "JOB_STATE_FAILED" || "$STATUS" == "JOB_STATE_CANCELLED" || "$STATUS" == "JOB_STATE_ERROR" ]]; then
+              echo "El entrenamiento fallo con estado: $STATUS"
+              gcloud ai custom-jobs describe "$RAW_JOB_ID" \
+                --project="${{ vars.GCP_PROJECT_ID }}" \
+                --region="${{ vars.GCP_REGION }}" \
+                --format="value(error.message)" || echo "No hay detalle de error disponible."
+              exit 1
+            fi
+
+            COUNT=$((COUNT+1))
+            sleep 20
+          done
+
+          echo "Error: Se alcanzo el tiempo limite de espera."
+          exit 1
 
       - name: Update model_config.json and Push to Repo
         env:

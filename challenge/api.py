@@ -15,12 +15,12 @@ model = DelayModel()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
-        model.load_model("delay_model.onnx")
-        print("Modelo ONNX cargado en memoria")
+        # Usa la ruta absoluta o asegúrate de que el archivo exista
+        model.load_model("./delay_model.onnx") 
+        print("Modelo ONNX cargado exitosamente")
     except Exception as e:
-        print(f"No se pudo cargar el modelo ONNX, Error: {e}")
-    
-    yield # FastAPI levanta el servidor y atiende peticiones
+        print(f"ERROR CRÍTICO: No se pudo cargar el modelo: {e}")
+    yield
     
     # Logica de shutdown
     print("Apagando la API y liberando recursos")
