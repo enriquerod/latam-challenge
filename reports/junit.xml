@@ -1,4 +1,143 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="4" time="7.786" timestamp="2026-02-19T19:33:48.251970-06:00" hostname="MTY-MNOI0P81ZLH"><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_failed_unkown_column_1" time="0.051"><failure message="fastapi.exceptions.ResponseValidationError: 1 validation errors:&#10;  {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}">self = &lt;tests.api.test_api.TestBatchPipeline testMethod=test_should_failed_unkown_column_1&gt;
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="4" time="23.028" timestamp="2026-02-20T00:41:54.894452-06:00" hostname="MTY-MNOI0P81ZLH"><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_failed_unkown_column_1" time="0.068"><failure message="TypeError: Object of type ValueError is not JSON serializable">scope = {'app': &lt;fastapi.applications.FastAPI object at 0x000002787F833920&gt;, 'client': ['testclient', 50000], 'endpoint': &lt;function post_predict at 0x000002780122FD80&gt;, 'extensions': {'http.response.debug': {}}, ...}
+receive = &lt;function _TestClientTransport.handle_request.&lt;locals&gt;.receive at 0x0000027801265B20&gt;
+send = &lt;function wrap_app_handling_exceptions.&lt;locals&gt;.wrapped_app.&lt;locals&gt;.sender at 0x00000278012671A0&gt;
+
+    async def wrapped_app(scope: Scope, receive: Receive, send: Send) -&gt; None:
+        response_started = False
+    
+        async def sender(message: Message) -&gt; None:
+            nonlocal response_started
+    
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+    
+        try:
+&gt;           await app(scope, receive, sender)
+
+.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv-3-12\Lib\site-packages\starlette\routing.py:73: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+request = &lt;starlette.requests.Request object at 0x00000278012BC350&gt;
+
+    async def app(request: Request) -&gt; Response:
+        response: Union[Response, None] = None
+        async with AsyncExitStack() as file_stack:
+            try:
+                body: Any = None
+                if body_field:
+                    if is_body_form:
+                        body = await request.form()
+                        file_stack.push_async_callback(body.close)
+                    else:
+                        body_bytes = await request.body()
+                        if body_bytes:
+                            json_body: Any = Undefined
+                            content_type_value = request.headers.get("content-type")
+                            if not content_type_value:
+                                json_body = await request.json()
+                            else:
+                                message = email.message.Message()
+                                message["content-type"] = content_type_value
+                                if message.get_content_maintype() == "application":
+                                    subtype = message.get_content_subtype()
+                                    if subtype == "json" or subtype.endswith("+json"):
+                                        json_body = await request.json()
+                            if json_body != Undefined:
+                                body = json_body
+                            else:
+                                body = body_bytes
+            except json.JSONDecodeError as e:
+                validation_error = RequestValidationError(
+                    [
+                        {
+                            "type": "json_invalid",
+                            "loc": ("body", e.pos),
+                            "msg": "JSON decode error",
+                            "input": {},
+                            "ctx": {"error": e.msg},
+                        }
+                    ],
+                    body=e.doc,
+                )
+                raise validation_error from e
+            except HTTPException:
+                # If a middleware raises an HTTPException, it should be raised again
+                raise
+            except Exception as e:
+                http_error = HTTPException(
+                    status_code=400, detail="There was an error parsing the body"
+                )
+                raise http_error from e
+            errors: List[Any] = []
+            async with AsyncExitStack() as async_exit_stack:
+                solved_result = await solve_dependencies(
+                    request=request,
+                    dependant=dependant,
+                    body=body,
+                    dependency_overrides_provider=dependency_overrides_provider,
+                    async_exit_stack=async_exit_stack,
+                    embed_body_fields=embed_body_fields,
+                )
+                errors = solved_result.errors
+                if not errors:
+                    raw_response = await run_endpoint_function(
+                        dependant=dependant,
+                        values=solved_result.values,
+                        is_coroutine=is_coroutine,
+                    )
+                    if isinstance(raw_response, Response):
+                        if raw_response.background is None:
+                            raw_response.background = solved_result.background_tasks
+                        response = raw_response
+                    else:
+                        response_args: Dict[str, Any] = {
+                            "background": solved_result.background_tasks
+                        }
+                        # If status_code was set, use it, otherwise use the default from the
+                        # response class, in the case of redirect it's 307
+                        current_status_code = (
+                            status_code
+                            if status_code
+                            else solved_result.response.status_code
+                        )
+                        if current_status_code is not None:
+                            response_args["status_code"] = current_status_code
+                        if solved_result.response.status_code:
+                            response_args["status_code"] = (
+                                solved_result.response.status_code
+                            )
+                        content = await serialize_response(
+                            field=response_field,
+                            response_content=raw_response,
+                            include=response_model_include,
+                            exclude=response_model_exclude,
+                            by_alias=response_model_by_alias,
+                            exclude_unset=response_model_exclude_unset,
+                            exclude_defaults=response_model_exclude_defaults,
+                            exclude_none=response_model_exclude_none,
+                            is_coroutine=is_coroutine,
+                        )
+                        response = actual_response_class(content, **response_args)
+                        if not is_body_allowed_for_status_code(response.status_code):
+                            response.body = b""
+                        response.headers.raw.extend(solved_result.response.headers.raw)
+            if errors:
+                validation_error = RequestValidationError(
+                    _normalize_errors(errors), body=body
+                )
+&gt;               raise validation_error
+E               fastapi.exceptions.RequestValidationError: [{'type': 'value_error', 'loc': ('body', 'flights', 0, 'MES'), 'msg': 'Value error, MES debe estar entre 1 y 12', 'input': 13, 'ctx': {'error': ValueError('MES debe estar entre 1 y 12')}}]
+
+.venv-3-12\Lib\site-packages\fastapi\routing.py:346: RequestValidationError
+
+During handling of the above exception, another exception occurred:
+
+self = &lt;tests.api.test_api.TestBatchPipeline testMethod=test_should_failed_unkown_column_1&gt;
 
     def test_should_failed_unkown_column_1(self):
         data = {
@@ -42,7 +181,7 @@ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
 .venv-3-12\Lib\site-packages\anyio\from_thread.py:334: in call
     return cast(T_Retval, self.start_task_soon(func, *args).result())
                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent\futures\_base.py:449: in result
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent\futures\_base.py:456: in result
     return self.__get_result()
            ^^^^^^^^^^^^^^^^^^^
 C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent\futures\_base.py:401: in __get_result
@@ -72,57 +211,194 @@ C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent
     await self.app(scope, receive, send)
 .venv-3-12\Lib\site-packages\starlette\routing.py:76: in app
     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
-    raise exc
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
-    await app(scope, receive, sender)
+.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:73: in wrapped_app
+    response = await handler(conn, exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+challenge\api.py:36: in validation_exception_handler
+    return JSONResponse(
+.venv-3-12\Lib\site-packages\starlette\responses.py:178: in __init__
+    super().__init__(content, status_code, headers, media_type, background)
+.venv-3-12\Lib\site-packages\starlette\responses.py:41: in __init__
+    self.body = self.render(content)
+                ^^^^^^^^^^^^^^^^^^^^
+.venv-3-12\Lib\site-packages\starlette\responses.py:181: in render
+    return json.dumps(
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py:238: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:200: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:258: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;json.encoder.JSONEncoder object at 0x00000278012BCA10&gt;, o = ValueError('MES debe estar entre 1 y 12')
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+    
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+    
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return JSONEncoder.default(self, o)
+    
+        """
+&gt;       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type ValueError is not JSON serializable
+
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:180: TypeError</failure></testcase><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_failed_unkown_column_2" time="0.011"><failure message="TypeError: Object of type ValueError is not JSON serializable">scope = {'app': &lt;fastapi.applications.FastAPI object at 0x000002787F833920&gt;, 'client': ['testclient', 50000], 'endpoint': &lt;function post_predict at 0x000002780122FD80&gt;, 'extensions': {'http.response.debug': {}}, ...}
+receive = &lt;function _TestClientTransport.handle_request.&lt;locals&gt;.receive at 0x0000027801E48220&gt;
+send = &lt;function wrap_app_handling_exceptions.&lt;locals&gt;.wrapped_app.&lt;locals&gt;.sender at 0x0000027801E48B80&gt;
+
+    async def wrapped_app(scope: Scope, receive: Receive, send: Send) -&gt; None:
+        response_started = False
+    
+        async def sender(message: Message) -&gt; None:
+            nonlocal response_started
+    
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+    
+        try:
+&gt;           await app(scope, receive, sender)
+
+.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 .venv-3-12\Lib\site-packages\starlette\routing.py:73: in app
     response = await f(request)
                ^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\fastapi\routing.py:327: in app
-    content = await serialize_response(
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-    async def serialize_response(
-        *,
-        field: Optional[ModelField] = None,
-        response_content: Any,
-        include: Optional[IncEx] = None,
-        exclude: Optional[IncEx] = None,
-        by_alias: bool = True,
-        exclude_unset: bool = False,
-        exclude_defaults: bool = False,
-        exclude_none: bool = False,
-        is_coroutine: bool = True,
-    ) -&gt; Any:
-        if field:
-            errors = []
-            if not hasattr(field, "serialize"):
-                # pydantic v1
-                response_content = _prepare_response_content(
-                    response_content,
-                    exclude_unset=exclude_unset,
-                    exclude_defaults=exclude_defaults,
-                    exclude_none=exclude_none,
-                )
-            if is_coroutine:
-                value, errors_ = field.validate(response_content, {}, loc=("response",))
-            else:
-                value, errors_ = await run_in_threadpool(
-                    field.validate, response_content, {}, loc=("response",)
-                )
-            if isinstance(errors_, list):
-                errors.extend(errors_)
-            elif errors_:
-                errors.append(errors_)
-            if errors:
-&gt;               raise ResponseValidationError(
-                    errors=_normalize_errors(errors), body=response_content
-                )
-E               fastapi.exceptions.ResponseValidationError: 1 validation errors:
-E                 {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}
+request = &lt;starlette.requests.Request object at 0x000002780137BF80&gt;
 
-.venv-3-12\Lib\site-packages\fastapi\routing.py:176: ResponseValidationError</failure></testcase><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_failed_unkown_column_2" time="0.008"><failure message="fastapi.exceptions.ResponseValidationError: 1 validation errors:&#10;  {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}">self = &lt;tests.api.test_api.TestBatchPipeline testMethod=test_should_failed_unkown_column_2&gt;
+    async def app(request: Request) -&gt; Response:
+        response: Union[Response, None] = None
+        async with AsyncExitStack() as file_stack:
+            try:
+                body: Any = None
+                if body_field:
+                    if is_body_form:
+                        body = await request.form()
+                        file_stack.push_async_callback(body.close)
+                    else:
+                        body_bytes = await request.body()
+                        if body_bytes:
+                            json_body: Any = Undefined
+                            content_type_value = request.headers.get("content-type")
+                            if not content_type_value:
+                                json_body = await request.json()
+                            else:
+                                message = email.message.Message()
+                                message["content-type"] = content_type_value
+                                if message.get_content_maintype() == "application":
+                                    subtype = message.get_content_subtype()
+                                    if subtype == "json" or subtype.endswith("+json"):
+                                        json_body = await request.json()
+                            if json_body != Undefined:
+                                body = json_body
+                            else:
+                                body = body_bytes
+            except json.JSONDecodeError as e:
+                validation_error = RequestValidationError(
+                    [
+                        {
+                            "type": "json_invalid",
+                            "loc": ("body", e.pos),
+                            "msg": "JSON decode error",
+                            "input": {},
+                            "ctx": {"error": e.msg},
+                        }
+                    ],
+                    body=e.doc,
+                )
+                raise validation_error from e
+            except HTTPException:
+                # If a middleware raises an HTTPException, it should be raised again
+                raise
+            except Exception as e:
+                http_error = HTTPException(
+                    status_code=400, detail="There was an error parsing the body"
+                )
+                raise http_error from e
+            errors: List[Any] = []
+            async with AsyncExitStack() as async_exit_stack:
+                solved_result = await solve_dependencies(
+                    request=request,
+                    dependant=dependant,
+                    body=body,
+                    dependency_overrides_provider=dependency_overrides_provider,
+                    async_exit_stack=async_exit_stack,
+                    embed_body_fields=embed_body_fields,
+                )
+                errors = solved_result.errors
+                if not errors:
+                    raw_response = await run_endpoint_function(
+                        dependant=dependant,
+                        values=solved_result.values,
+                        is_coroutine=is_coroutine,
+                    )
+                    if isinstance(raw_response, Response):
+                        if raw_response.background is None:
+                            raw_response.background = solved_result.background_tasks
+                        response = raw_response
+                    else:
+                        response_args: Dict[str, Any] = {
+                            "background": solved_result.background_tasks
+                        }
+                        # If status_code was set, use it, otherwise use the default from the
+                        # response class, in the case of redirect it's 307
+                        current_status_code = (
+                            status_code
+                            if status_code
+                            else solved_result.response.status_code
+                        )
+                        if current_status_code is not None:
+                            response_args["status_code"] = current_status_code
+                        if solved_result.response.status_code:
+                            response_args["status_code"] = (
+                                solved_result.response.status_code
+                            )
+                        content = await serialize_response(
+                            field=response_field,
+                            response_content=raw_response,
+                            include=response_model_include,
+                            exclude=response_model_exclude,
+                            by_alias=response_model_by_alias,
+                            exclude_unset=response_model_exclude_unset,
+                            exclude_defaults=response_model_exclude_defaults,
+                            exclude_none=response_model_exclude_none,
+                            is_coroutine=is_coroutine,
+                        )
+                        response = actual_response_class(content, **response_args)
+                        if not is_body_allowed_for_status_code(response.status_code):
+                            response.body = b""
+                        response.headers.raw.extend(solved_result.response.headers.raw)
+            if errors:
+                validation_error = RequestValidationError(
+                    _normalize_errors(errors), body=body
+                )
+&gt;               raise validation_error
+E               fastapi.exceptions.RequestValidationError: [{'type': 'value_error', 'loc': ('body', 'flights', 0, 'TIPOVUELO'), 'msg': "Value error, TIPOVUELO debe ser 'I' (Internacional) o 'N' (Nacional)", 'input': 'O', 'ctx': {'error': ValueError("TIPOVUELO debe ser 'I' (Internacional) o 'N' (Nacional)")}}, {'type': 'value_error', 'loc': ('body', 'flights', 0, 'MES'), 'msg': 'Value error, MES debe estar entre 1 y 12', 'input': 13, 'ctx': {'error': ValueError('MES debe estar entre 1 y 12')}}]
+
+.venv-3-12\Lib\site-packages\fastapi\routing.py:346: RequestValidationError
+
+During handling of the above exception, another exception occurred:
+
+self = &lt;tests.api.test_api.TestBatchPipeline testMethod=test_should_failed_unkown_column_2&gt;
 
     def test_should_failed_unkown_column_2(self):
         data = {
@@ -196,57 +472,194 @@ C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent
     await self.app(scope, receive, send)
 .venv-3-12\Lib\site-packages\starlette\routing.py:76: in app
     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
-    raise exc
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
-    await app(scope, receive, sender)
+.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:73: in wrapped_app
+    response = await handler(conn, exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+challenge\api.py:36: in validation_exception_handler
+    return JSONResponse(
+.venv-3-12\Lib\site-packages\starlette\responses.py:178: in __init__
+    super().__init__(content, status_code, headers, media_type, background)
+.venv-3-12\Lib\site-packages\starlette\responses.py:41: in __init__
+    self.body = self.render(content)
+                ^^^^^^^^^^^^^^^^^^^^
+.venv-3-12\Lib\site-packages\starlette\responses.py:181: in render
+    return json.dumps(
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py:238: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:200: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:258: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;json.encoder.JSONEncoder object at 0x00000278013780B0&gt;, o = ValueError("TIPOVUELO debe ser 'I' (Internacional) o 'N' (Nacional)")
+
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+    
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+    
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return JSONEncoder.default(self, o)
+    
+        """
+&gt;       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type ValueError is not JSON serializable
+
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:180: TypeError</failure></testcase><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_failed_unkown_column_3" time="0.009"><failure message="TypeError: Object of type ValueError is not JSON serializable">scope = {'app': &lt;fastapi.applications.FastAPI object at 0x000002787F833920&gt;, 'client': ['testclient', 50000], 'endpoint': &lt;function post_predict at 0x000002780122FD80&gt;, 'extensions': {'http.response.debug': {}}, ...}
+receive = &lt;function _TestClientTransport.handle_request.&lt;locals&gt;.receive at 0x0000027801E49260&gt;
+send = &lt;function wrap_app_handling_exceptions.&lt;locals&gt;.wrapped_app.&lt;locals&gt;.sender at 0x0000027801E498A0&gt;
+
+    async def wrapped_app(scope: Scope, receive: Receive, send: Send) -&gt; None:
+        response_started = False
+    
+        async def sender(message: Message) -&gt; None:
+            nonlocal response_started
+    
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+    
+        try:
+&gt;           await app(scope, receive, sender)
+
+.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 .venv-3-12\Lib\site-packages\starlette\routing.py:73: in app
     response = await f(request)
                ^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\fastapi\routing.py:327: in app
-    content = await serialize_response(
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-    async def serialize_response(
-        *,
-        field: Optional[ModelField] = None,
-        response_content: Any,
-        include: Optional[IncEx] = None,
-        exclude: Optional[IncEx] = None,
-        by_alias: bool = True,
-        exclude_unset: bool = False,
-        exclude_defaults: bool = False,
-        exclude_none: bool = False,
-        is_coroutine: bool = True,
-    ) -&gt; Any:
-        if field:
-            errors = []
-            if not hasattr(field, "serialize"):
-                # pydantic v1
-                response_content = _prepare_response_content(
-                    response_content,
-                    exclude_unset=exclude_unset,
-                    exclude_defaults=exclude_defaults,
-                    exclude_none=exclude_none,
-                )
-            if is_coroutine:
-                value, errors_ = field.validate(response_content, {}, loc=("response",))
-            else:
-                value, errors_ = await run_in_threadpool(
-                    field.validate, response_content, {}, loc=("response",)
-                )
-            if isinstance(errors_, list):
-                errors.extend(errors_)
-            elif errors_:
-                errors.append(errors_)
-            if errors:
-&gt;               raise ResponseValidationError(
-                    errors=_normalize_errors(errors), body=response_content
-                )
-E               fastapi.exceptions.ResponseValidationError: 1 validation errors:
-E                 {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}
+request = &lt;starlette.requests.Request object at 0x0000027801385C70&gt;
 
-.venv-3-12\Lib\site-packages\fastapi\routing.py:176: ResponseValidationError</failure></testcase><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_failed_unkown_column_3" time="0.008"><failure message="fastapi.exceptions.ResponseValidationError: 1 validation errors:&#10;  {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}">self = &lt;tests.api.test_api.TestBatchPipeline testMethod=test_should_failed_unkown_column_3&gt;
+    async def app(request: Request) -&gt; Response:
+        response: Union[Response, None] = None
+        async with AsyncExitStack() as file_stack:
+            try:
+                body: Any = None
+                if body_field:
+                    if is_body_form:
+                        body = await request.form()
+                        file_stack.push_async_callback(body.close)
+                    else:
+                        body_bytes = await request.body()
+                        if body_bytes:
+                            json_body: Any = Undefined
+                            content_type_value = request.headers.get("content-type")
+                            if not content_type_value:
+                                json_body = await request.json()
+                            else:
+                                message = email.message.Message()
+                                message["content-type"] = content_type_value
+                                if message.get_content_maintype() == "application":
+                                    subtype = message.get_content_subtype()
+                                    if subtype == "json" or subtype.endswith("+json"):
+                                        json_body = await request.json()
+                            if json_body != Undefined:
+                                body = json_body
+                            else:
+                                body = body_bytes
+            except json.JSONDecodeError as e:
+                validation_error = RequestValidationError(
+                    [
+                        {
+                            "type": "json_invalid",
+                            "loc": ("body", e.pos),
+                            "msg": "JSON decode error",
+                            "input": {},
+                            "ctx": {"error": e.msg},
+                        }
+                    ],
+                    body=e.doc,
+                )
+                raise validation_error from e
+            except HTTPException:
+                # If a middleware raises an HTTPException, it should be raised again
+                raise
+            except Exception as e:
+                http_error = HTTPException(
+                    status_code=400, detail="There was an error parsing the body"
+                )
+                raise http_error from e
+            errors: List[Any] = []
+            async with AsyncExitStack() as async_exit_stack:
+                solved_result = await solve_dependencies(
+                    request=request,
+                    dependant=dependant,
+                    body=body,
+                    dependency_overrides_provider=dependency_overrides_provider,
+                    async_exit_stack=async_exit_stack,
+                    embed_body_fields=embed_body_fields,
+                )
+                errors = solved_result.errors
+                if not errors:
+                    raw_response = await run_endpoint_function(
+                        dependant=dependant,
+                        values=solved_result.values,
+                        is_coroutine=is_coroutine,
+                    )
+                    if isinstance(raw_response, Response):
+                        if raw_response.background is None:
+                            raw_response.background = solved_result.background_tasks
+                        response = raw_response
+                    else:
+                        response_args: Dict[str, Any] = {
+                            "background": solved_result.background_tasks
+                        }
+                        # If status_code was set, use it, otherwise use the default from the
+                        # response class, in the case of redirect it's 307
+                        current_status_code = (
+                            status_code
+                            if status_code
+                            else solved_result.response.status_code
+                        )
+                        if current_status_code is not None:
+                            response_args["status_code"] = current_status_code
+                        if solved_result.response.status_code:
+                            response_args["status_code"] = (
+                                solved_result.response.status_code
+                            )
+                        content = await serialize_response(
+                            field=response_field,
+                            response_content=raw_response,
+                            include=response_model_include,
+                            exclude=response_model_exclude,
+                            by_alias=response_model_by_alias,
+                            exclude_unset=response_model_exclude_unset,
+                            exclude_defaults=response_model_exclude_defaults,
+                            exclude_none=response_model_exclude_none,
+                            is_coroutine=is_coroutine,
+                        )
+                        response = actual_response_class(content, **response_args)
+                        if not is_body_allowed_for_status_code(response.status_code):
+                            response.body = b""
+                        response.headers.raw.extend(solved_result.response.headers.raw)
+            if errors:
+                validation_error = RequestValidationError(
+                    _normalize_errors(errors), body=body
+                )
+&gt;               raise validation_error
+E               fastapi.exceptions.RequestValidationError: [{'type': 'value_error', 'loc': ('body', 'flights', 0, 'TIPOVUELO'), 'msg': "Value error, TIPOVUELO debe ser 'I' (Internacional) o 'N' (Nacional)", 'input': 'O', 'ctx': {'error': ValueError("TIPOVUELO debe ser 'I' (Internacional) o 'N' (Nacional)")}}, {'type': 'value_error', 'loc': ('body', 'flights', 0, 'MES'), 'msg': 'Value error, MES debe estar entre 1 y 12', 'input': 13, 'ctx': {'error': ValueError('MES debe estar entre 1 y 12')}}]
+
+.venv-3-12\Lib\site-packages\fastapi\routing.py:346: RequestValidationError
+
+During handling of the above exception, another exception occurred:
+
+self = &lt;tests.api.test_api.TestBatchPipeline testMethod=test_should_failed_unkown_column_3&gt;
 
     def test_should_failed_unkown_column_3(self):
         data = {
@@ -320,178 +733,52 @@ C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent
     await self.app(scope, receive, send)
 .venv-3-12\Lib\site-packages\starlette\routing.py:76: in app
     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
-    raise exc
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
-    await app(scope, receive, sender)
-.venv-3-12\Lib\site-packages\starlette\routing.py:73: in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\fastapi\routing.py:327: in app
-    content = await serialize_response(
+.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:73: in wrapped_app
+    response = await handler(conn, exc)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+challenge\api.py:36: in validation_exception_handler
+    return JSONResponse(
+.venv-3-12\Lib\site-packages\starlette\responses.py:178: in __init__
+    super().__init__(content, status_code, headers, media_type, background)
+.venv-3-12\Lib\site-packages\starlette\responses.py:41: in __init__
+    self.body = self.render(content)
+                ^^^^^^^^^^^^^^^^^^^^
+.venv-3-12\Lib\site-packages\starlette\responses.py:181: in render
+    return json.dumps(
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\__init__.py:238: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:200: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:258: in iterencode
+    return _iterencode(o, 0)
+           ^^^^^^^^^^^^^^^^^
 _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
-    async def serialize_response(
-        *,
-        field: Optional[ModelField] = None,
-        response_content: Any,
-        include: Optional[IncEx] = None,
-        exclude: Optional[IncEx] = None,
-        by_alias: bool = True,
-        exclude_unset: bool = False,
-        exclude_defaults: bool = False,
-        exclude_none: bool = False,
-        is_coroutine: bool = True,
-    ) -&gt; Any:
-        if field:
-            errors = []
-            if not hasattr(field, "serialize"):
-                # pydantic v1
-                response_content = _prepare_response_content(
-                    response_content,
-                    exclude_unset=exclude_unset,
-                    exclude_defaults=exclude_defaults,
-                    exclude_none=exclude_none,
-                )
-            if is_coroutine:
-                value, errors_ = field.validate(response_content, {}, loc=("response",))
-            else:
-                value, errors_ = await run_in_threadpool(
-                    field.validate, response_content, {}, loc=("response",)
-                )
-            if isinstance(errors_, list):
-                errors.extend(errors_)
-            elif errors_:
-                errors.append(errors_)
-            if errors:
-&gt;               raise ResponseValidationError(
-                    errors=_normalize_errors(errors), body=response_content
-                )
-E               fastapi.exceptions.ResponseValidationError: 1 validation errors:
-E                 {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}
+self = &lt;json.encoder.JSONEncoder object at 0x0000027801384260&gt;, o = ValueError("TIPOVUELO debe ser 'I' (Internacional) o 'N' (Nacional)")
 
-.venv-3-12\Lib\site-packages\fastapi\routing.py:176: ResponseValidationError</failure></testcase><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_get_predict" time="0.009"><failure message="fastapi.exceptions.ResponseValidationError: 1 validation errors:&#10;  {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}">self = &lt;tests.api.test_api.TestBatchPipeline testMethod=test_should_get_predict&gt;
+    def default(self, o):
+        """Implement this method in a subclass such that it returns
+        a serializable object for ``o``, or calls the base implementation
+        (to raise a ``TypeError``).
+    
+        For example, to support arbitrary iterators, you could
+        implement default like this::
+    
+            def default(self, o):
+                try:
+                    iterable = iter(o)
+                except TypeError:
+                    pass
+                else:
+                    return list(iterable)
+                # Let the base class default method raise the TypeError
+                return JSONEncoder.default(self, o)
+    
+        """
+&gt;       raise TypeError(f'Object of type {o.__class__.__name__} '
+                        f'is not JSON serializable')
+E       TypeError: Object of type ValueError is not JSON serializable
 
-    def test_should_get_predict(self):
-        data = {
-            "flights": [
-                {
-                    "OPERA": "Aerolineas Argentinas",
-                    "TIPOVUELO": "N",
-                    "MES": 3
-                }
-            ]
-        }
-        # when("xgboost.XGBClassifier").predict(ANY).thenReturn(np.array([0])) # change this line to the model of chosing
-&gt;       response = self.client.post("/predict", json=data)
-                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-tests\api\test_api.py:22: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-.venv-3-12\Lib\site-packages\starlette\testclient.py:597: in post
-    return super().post(
-.venv-3-12\Lib\site-packages\httpx\_client.py:1145: in post
-    return self.request(
-.venv-3-12\Lib\site-packages\starlette\testclient.py:488: in request
-    return super().request(
-.venv-3-12\Lib\site-packages\httpx\_client.py:827: in request
-    return self.send(request, auth=auth, follow_redirects=follow_redirects)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\httpx\_client.py:914: in send
-    response = self._send_handling_auth(
-.venv-3-12\Lib\site-packages\httpx\_client.py:942: in _send_handling_auth
-    response = self._send_handling_redirects(
-.venv-3-12\Lib\site-packages\httpx\_client.py:979: in _send_handling_redirects
-    response = self._send_single_request(request)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\httpx\_client.py:1015: in _send_single_request
-    response = transport.handle_request(request)
-               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\starlette\testclient.py:381: in handle_request
-    raise exc
-.venv-3-12\Lib\site-packages\starlette\testclient.py:378: in handle_request
-    portal.call(self.app, scope, receive, send)
-.venv-3-12\Lib\site-packages\anyio\from_thread.py:334: in call
-    return cast(T_Retval, self.start_task_soon(func, *args).result())
-                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent\futures\_base.py:449: in result
-    return self.__get_result()
-           ^^^^^^^^^^^^^^^^^^^
-C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\concurrent\futures\_base.py:401: in __get_result
-    raise self._exception
-.venv-3-12\Lib\site-packages\anyio\from_thread.py:259: in _call_func
-    retval = await retval_or_awaitable
-             ^^^^^^^^^^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\fastapi\applications.py:1054: in __call__
-    await super().__call__(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\applications.py:113: in __call__
-    await self.middleware_stack(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\middleware\errors.py:187: in __call__
-    raise exc
-.venv-3-12\Lib\site-packages\starlette\middleware\errors.py:165: in __call__
-    await self.app(scope, receive, _send)
-.venv-3-12\Lib\site-packages\starlette\middleware\exceptions.py:62: in __call__
-    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
-    raise exc
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
-    await app(scope, receive, sender)
-.venv-3-12\Lib\site-packages\starlette\routing.py:715: in __call__
-    await self.middleware_stack(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\routing.py:735: in app
-    await route.handle(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\routing.py:288: in handle
-    await self.app(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\routing.py:76: in app
-    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:62: in wrapped_app
-    raise exc
-.venv-3-12\Lib\site-packages\starlette\_exception_handler.py:51: in wrapped_app
-    await app(scope, receive, sender)
-.venv-3-12\Lib\site-packages\starlette\routing.py:73: in app
-    response = await f(request)
-               ^^^^^^^^^^^^^^^^
-.venv-3-12\Lib\site-packages\fastapi\routing.py:327: in app
-    content = await serialize_response(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
-
-    async def serialize_response(
-        *,
-        field: Optional[ModelField] = None,
-        response_content: Any,
-        include: Optional[IncEx] = None,
-        exclude: Optional[IncEx] = None,
-        by_alias: bool = True,
-        exclude_unset: bool = False,
-        exclude_defaults: bool = False,
-        exclude_none: bool = False,
-        is_coroutine: bool = True,
-    ) -&gt; Any:
-        if field:
-            errors = []
-            if not hasattr(field, "serialize"):
-                # pydantic v1
-                response_content = _prepare_response_content(
-                    response_content,
-                    exclude_unset=exclude_unset,
-                    exclude_defaults=exclude_defaults,
-                    exclude_none=exclude_none,
-                )
-            if is_coroutine:
-                value, errors_ = field.validate(response_content, {}, loc=("response",))
-            else:
-                value, errors_ = await run_in_threadpool(
-                    field.validate, response_content, {}, loc=("response",)
-                )
-            if isinstance(errors_, list):
-                errors.extend(errors_)
-            elif errors_:
-                errors.append(errors_)
-            if errors:
-&gt;               raise ResponseValidationError(
-                    errors=_normalize_errors(errors), body=response_content
-                )
-E               fastapi.exceptions.ResponseValidationError: 1 validation errors:
-E                 {'type': 'dict_type', 'loc': ('response',), 'msg': 'Input should be a valid dictionary', 'input': None}
-
-.venv-3-12\Lib\site-packages\fastapi\routing.py:176: ResponseValidationError</failure></testcase></testsuite></testsuites>
+C:\Users\luis.d.rodriguez\AppData\Local\Programs\Python\Python312\Lib\json\encoder.py:180: TypeError</failure></testcase><testcase classname="tests.api.test_api.TestBatchPipeline" name="test_should_get_predict" time="0.261" /></testsuite></testsuites>
