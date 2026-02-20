@@ -62,7 +62,6 @@ jobs:
             exit 1
           fi
 
-          echo "Artefacto mas reciente encontrado: $LATEST_MODEL_URI"
           gsutil cp $LATEST_MODEL_URI ./delay_model.onnx
           
           if [ ! -f delay_model.onnx ]; then
@@ -82,14 +81,22 @@ jobs:
         run: |
           IMAGE_PATH="${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY }}/api:${{ github.sha }}"
           
+          cat <<EOF > env_vars.yaml
+          TOP_FEATURES: "${{ vars.TOP_FEATURES }}"
+          DELAY_THRESHOLD_MINUTES: "${{ vars.DELAY_THRESHOLD_MINUTE }}"
+          MODEL_VERSION: "${{ vars.MODEL_VERSION }}"
+          EOF
+          
           LIVE_URL=$(gcloud run deploy ${{ env.SERVICE_NAME }} \
             --image $IMAGE_PATH \
-            --region ${{ vars.GCP_REGION }} \
+            --region ${{ env.GCP_REGION }} \
             --platform managed \
             --allow-unauthenticated \
             --memory 1Gi \
             --cpu 1 \
-            --set-env-vars TOP_FEATURES="${{ vars.TOP_FEATURES }}",DELAY_THRESHOLD_MINUTES="${{ vars.DELAY_THRESHOLD_MINUTE }}",MODEL_VERSION="${{ vars.MODEL_VERSION }}" \
+            --concurrency 80 \
+            --max-instances 10 \
+            --env-vars-file env_vars.yaml \
             --format="value(status.url)")
             
           echo "LIVE_URL=$LIVE_URL" >> $GITHUB_ENV
