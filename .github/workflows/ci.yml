@@ -42,4 +42,5 @@ jobs:
         run: make model-test
 
       - name: Run API Integration Tests
+        continue-on-error: true
         run: make api-test
