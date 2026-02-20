@@ -55,55 +55,31 @@ jobs:
 
           echo "Lanzando Custom Job en Vertex AI: $JOB_NAME"
 
-          # 3. Lanzamiento y captura limpia del ID
-          # Redirigimos stderr a /dev/null para evitar que los logs de docker contaminen la variable
-          RAW_JOB_ID=$(gcloud ai custom-jobs create \
+          # 3. Lanzamiento y captura limpia del ID usando archivo temporal para evitar ruidos de logs
+          gcloud ai custom-jobs create \
             --project="${{ vars.GCP_PROJECT_ID }}" \
             --region="${{ vars.GCP_REGION }}" \
             --display-name="$JOB_NAME" \
             --labels=env=$ENV_LOWER,workflow=continuous-training \
             --worker-pool-spec="machine-type=n1-highmem-2,replica-count=1,executor-image-uri=python:3.12-slim,local-package-path=./,script=challenge/model_train.py,extra-dirs=data;tests" \
             --args="$JOB_ARGS" \
-            --format="value(name)" --quiet 2>/dev/null | xargs)
+            --format="value(name)" --quiet > job_output.txt 2>&1 || true
+
+          RAW_JOB_ID=$(grep -o "projects/.*/customJobs/[0-9]*" job_output.txt | head -n 1 | xargs)
           
           if [ -z "$RAW_JOB_ID" ]; then
             echo "Error: No se pudo capturar el ID del Job. Revisar logs de GCP."
+            cat job_output.txt
             exit 1
           fi
 
           echo "Job ID detectado: $RAW_JOB_ID"
 
-          # 4. Monitoreo del estado (Polling)
-          echo "Monitoreando entrenamiento (Max 20 min)..."
-          MAX_RETRIES=60
-          COUNT=0
-
-          while [ $COUNT -lt $MAX_RETRIES ]; do
-            STATUS=$(gcloud ai custom-jobs describe "$RAW_JOB_ID" \
-              --project="${{ vars.GCP_PROJECT_ID }}" \
-              --region="${{ vars.GCP_REGION }}" \
-              --format="value(state)")
-            
-            echo "[$(date +%H:%M:%S)] Estado actual: $STATUS"
-
-            if [[ "$STATUS" == "JOB_STATE_SUCCEEDED" ]]; then
-              echo "Entrenamiento finalizado con exito."
-              exit 0
-            elif [[ "$STATUS" == "JOB_STATE_FAILED" || "$STATUS" == "JOB_STATE_CANCELLED" || "$STATUS" == "JOB_STATE_ERROR" ]]; then
-              echo "El entrenamiento fallo en Vertex AI con estado: $STATUS"
-              gcloud ai custom-jobs describe "$RAW_JOB_ID" \
-                --project="${{ vars.GCP_PROJECT_ID }}" \
-                --region="${{ vars.GCP_REGION }}" \
-                --format="value(error.message)" || echo "No se obtuvo detalle del error."
-              exit 1
-            fi
-
-            COUNT=$((COUNT+1))
-            sleep 20
-          done
-
-          echo "Timeout: El Job tardo demasiado."
-          exit 1
+          # 4. Monitoreo usando stream-logs para mayor eficiencia
+          echo "Conectando con los logs de Vertex AI..."
+          gcloud ai custom-jobs stream-logs "$RAW_JOB_ID" \
+            --project="${{ vars.GCP_PROJECT_ID }}" \
+            --region="${{ vars.GCP_REGION }}"
 
       - name: Update model_config.json and Push to Repo
         env:
