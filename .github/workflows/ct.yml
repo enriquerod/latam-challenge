@@ -46,7 +46,6 @@ jobs:
           JOB_ARGS="--data_path=${{ vars.DATA_PATH }}"
           JOB_ARGS="$JOB_ARGS,--bucket_name=${{ vars.BUCKET_NAME }}"
           JOB_ARGS="$JOB_ARGS,--project_id=${{ vars.GCP_PROJECT_ID }}"
-          JOB_ARGS="$JOB_ARGS,--model_secret_key=${{ secrets.MI_API_SECRET }}"
           JOB_ARGS="$JOB_ARGS,--commit_sha=${{ github.sha }}"
           JOB_ARGS="$JOB_ARGS,--delay_threshold_minutes=${{ vars.DELAY_THRESHOLD_MINUTES }}"
           JOB_ARGS="$JOB_ARGS,--learning_rate=${{ vars.LEARNING_RATE }}"
