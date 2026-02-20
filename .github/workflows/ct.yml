@@ -55,13 +55,15 @@ jobs:
           gcloud ai custom-jobs create \
             --project="${{ vars.GCP_PROJECT_ID }}" \
             --region="${{ vars.GCP_REGION }}" \
-            --display-name="ct-onnx-train-${{ github.run_id }}" \
+            --display-name="ct-onnx-train-${{ github.sha }}" \
             --labels=env=$ENV_LOWER,workflow=continuous-training \
             --worker-pool-spec="machine-type=n1-highmem-2,replica-count=1,executor-image-uri=python:3.12-slim,local-package-path=./,script=challenge/model_train.py,extra-dirs=data;tests" \
             --args="$JOB_ARGS"
 
       # Auto-actualizacion de la version del modelo
       - name: Update model_config.json and Push to Repo
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "Actualizando model_config.json con el SHA: ${{ github.sha }}"
           
