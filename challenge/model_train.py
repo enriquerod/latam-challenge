@@ -2,12 +2,11 @@ import argparse
 import pandas as pd
 import os
 from google.cloud import storage
-from model import DelayModel
+from challenge.model import DelayModel # Asegúrate de usar la ruta correcta según tu estructura
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Pipeline de Entrenamiento de Atrasos")
     
-    # Argumentos principales usados en el flujo actual
     parser.add_argument('--data_path', type=str, required=True, help="Ruta local al dataset")
     parser.add_argument('--bucket_name', type=str, required=True, help="Nombre del bucket en GCS")
     parser.add_argument('--commit_sha', type=str, required=True, help="SHA del commit para versionamiento")
@@ -22,7 +21,6 @@ def parse_args():
     return parser.parse_args()
 
 def main():
-
     args = parse_args()
     
     BUCKET_NAME = args.bucket_name
@@ -30,23 +28,35 @@ def main():
     DATA_PATH = args.data_path
     LOCAL_MODEL_PATH = args.model_path
 
-    # Deshacemos el truco del pipe (|) por si necesitas filtrar las columnas en el futuro
-    top_features_list = args.top_features.split('|') if args.top_features else []
+    # 1. Procesar la lista de features desde los argumentos (usando el separador '|')
+    # Limpiamos espacios en blanco por si acaso
+    top_features_list = [f.strip() for f in args.top_features.split('|') if f.strip()]
 
     print(f"Iniciando Pipeline de Entrenamiento para el commit {COMMIT_SHA}...")
+    print(f"Features seleccionadas ({len(top_features_list)}): {top_features_list}")
     
-    # Verificar si el archivo de datos existe
     if not os.path.exists(DATA_PATH):
         raise FileNotFoundError(f"No se encontró el dataset en {DATA_PATH}")
 
     data = pd.read_csv(DATA_PATH)
-    model = DelayModel()
+
+    # 2. INSTANCIAR EL MODELO PASANDO LAS TOP_FEATURES
+    # Esto asegura que el preprocesamiento y el guardado ONNX usen el tamaño correcto (10)
+    model = DelayModel(
+        top_features=top_features_list,
+        delay_threshold=args.delay_threshold_minutes,
+        random_state=args.random_state
+    )
     
     print("Generando features y entrenando...")
-    # Si quisieras usar los features pasados por GitHub Actions, podrías inyectar top_features_list aquí
+    # Ahora preprocess devolverá solo las columnas en top_features_list
     features, target = model.preprocess(data, target_column="delay")
+    
+    print(f"Dimensiones de los features: {features.shape}")
     model.fit(features, target)
     
+    # 3. GUARDAR EL MODELO
+    # El archivo ONNX ahora tendrá un input_shape coincidente con len(top_features_list)
     print("Guardando modelo localmente en ONNX...")
     model.save_model(LOCAL_MODEL_PATH)
 
@@ -55,7 +65,6 @@ def main():
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
     
-    # Vertex AI Model Registry prefiere leer de directorios (artifact_uri)
     gcs_blob_path = f"models/{COMMIT_SHA}/delay_model.onnx"
     
     blob = bucket.blob(gcs_blob_path)
@@ -64,7 +73,4 @@ def main():
     print(f"Modelo guardado en GCS: gs://{BUCKET_NAME}/{gcs_blob_path}")
 
 if __name__ == "__main__":
-    current_dir = os.getcwd()
-    print(f"Directorio actual de trabajo (CWD): {current_dir}")
-    print(f"Archivos en {current_dir}: {os.listdir(current_dir)}")
     main()
