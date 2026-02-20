@@ -1,13 +1,40 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="6" time="13.619" timestamp="2026-02-19T01:57:32.513293-06:00" hostname="MTY-MNOI0P81ZLH"><testcase classname="tests.model.test_model.TestModel" name="test_load_model_file_not_found" time="0.343" /><testcase classname="tests.model.test_model.TestModel" name="test_model_fit" time="0.461" /><testcase classname="tests.model.test_model.TestModel" name="test_model_predict" time="0.275" /><testcase classname="tests.model.test_model.TestModel" name="test_model_preprocess_for_serving" time="0.197" /><testcase classname="tests.model.test_model.TestModel" name="test_model_preprocess_for_training" time="0.327" /><testcase classname="tests.model.test_model.TestModel" name="test_save_and_load_model" time="0.380"><failure message="NameError: name 'tempfile' is not defined. Did you forget to import 'tempfile'">self = &lt;tests.model.test_model.TestModel testMethod=test_save_and_load_model&gt;
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="11" time="25.364" timestamp="2026-02-20T04:31:04.611733-06:00" hostname="MTY-MNOI0P81ZLH"><testcase classname="tests.model.test_model.TestModel" name="test_model_custom_init" time="0.335" /><testcase classname="tests.model.test_model.TestModel" name="test_model_fit" time="0.724" /><testcase classname="tests.model.test_model.TestModel" name="test_model_load_not_found" time="0.362" /><testcase classname="tests.model.test_model.TestModel" name="test_model_predict" time="0.227"><failure message="RuntimeError: Error: El modelo no ha sido cargado. Verifique la inicialización de la API">self = &lt;tests.model.test_model.TestModel testMethod=test_model_predict&gt;
 
-    def test_save_and_load_model(self):
-        """Test save_model() y load_model() con archivo temporal."""
-        features, target = self.model.preprocess(data=self.data, target_column="delay")
-        self.model.fit(features, target)
+    def test_model_predict(
+        self
+    ):
+        features = self.model.preprocess(
+            data=self.data
+        )
     
-        # Crear archivo temporal para guardar modelo
-&gt;       with tempfile.NamedTemporaryFile(suffix=".onnx", delete=False) as tmp:
-             ^^^^^^^^
-E       NameError: name 'tempfile' is not defined. Did you forget to import 'tempfile'
+&gt;       predicted_targets = self.model.predict(
+            features=features
+        )
 
-tests\model\test_model.py:111: NameError</failure></testcase></testsuite></testsuites>
+tests\model\test_model.py:96: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = &lt;challenge.model.DelayModel object at 0x0000020B6C638500&gt;
+features =        OPERA_Latin American Wings  MES_7  MES_10  OPERA_Grupo LATAM  MES_12  TIPOVUELO_I  MES_4  MES_11  OPERA_Sky Air...se              False    True         True  False   False              False           False
+
+[68206 rows x 10 columns]
+
+    def predict(self, features: pd.DataFrame) -&gt; List[int]:
+        # 1. Prioridad: ONNX
+        if self._onnx_session is not None:
+            input_name = self._onnx_session.get_inputs()[0].name
+            output_name = self._onnx_session.get_outputs()[0].name
+            preds = self._onnx_session.run(
+                [output_name],
+                {input_name: features.astype(np.float32).values}
+            )
+            return preds[0].tolist()
+    
+        # 2. Secundario: Sklearn
+        if self._model is not None:
+            return self._model.predict(features).tolist()
+    
+&gt;       raise RuntimeError("Error: El modelo no ha sido cargado. Verifique la inicialización de la API")
+E       RuntimeError: Error: El modelo no ha sido cargado. Verifique la inicialización de la API
+
+challenge\model.py:125: RuntimeError</failure></testcase><testcase classname="tests.model.test_model.TestModel" name="test_model_predict_fallback" time="0.224" /><testcase classname="tests.model.test_model.TestModel" name="test_model_predict_sklearn" time="0.474" /><testcase classname="tests.model.test_model.TestModel" name="test_model_preprocess_for_serving" time="0.246" /><testcase classname="tests.model.test_model.TestModel" name="test_model_preprocess_for_training" time="0.327" /><testcase classname="tests.model.test_model.TestModel" name="test_model_preprocess_missing_columns" time="0.277" /><testcase classname="tests.model.test_model.TestModel" name="test_model_save_and_load_onnx" time="0.551" /><testcase classname="tests.model.test_model.TestModel" name="test_model_save_no_model" time="0.211" /></testsuite></testsuites>

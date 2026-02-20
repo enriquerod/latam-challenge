@@ -1,0 +1,47 @@
+name: Continuous Integration
+
+on:
+  workflow_call:
+    inputs:
+      env_name:
+        required: true
+        type: string
+
+jobs:
+  execute-ci:
+    runs-on: ubuntu-latest
+    
+    # 1. GitHub carga el entorno que le mando el Orquestador Maestro (DEV, TEST, PROD)
+    environment: ${{ inputs.env_name }}
+    
+    # 2. extraemos las variables de ese entorno y las pasamos a Python
+    env:
+      GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      GCP_REGION: ${{ vars.GCP_REGION }}
+      TOP_FEATURES: ${{ vars.TOP_FEATURES }}
+      DELAY_THRESHOLD_MINUTES: ${{ vars.DELAY_THRESHOLD_MINUTES }} 
+      LEARNING_RATE: ${{ vars.LEARNING_RATE }}
+      RANDOM_STATE: ${{ vars.RANDOM_STATE }}
+      MODEL_PATH: ${{ vars.MODEL_PATH }}
+      MODEL_VERSION: ${{ vars.MODEL_VERSION }}
+      DATA_LOCAL_PATH: ${{ vars.DATA_LOCAL_PATH }}
+      DATA_PATH: ${{ vars.DATA_PATH }}
+      MODEL_LOCAL_PATH: ${{ vars.MODEL_LOCAL_PATH }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Install Dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run Model Unit Tests
+        continue-on-error: true
+        run: make model-test
+
+      - name: Run API Integration Tests
+        continue-on-error: true
+        run: make api-test

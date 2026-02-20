@@ -1,0 +1,65 @@
+name: MLOps Orchestrator
+
+on:
+  pull_request:
+    branches: [develop, 'release/*', main]
+    types: [closed]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  # ==========================================
+  # 1. SETUP: Determinar Ambiente
+  # ==========================================
+  setup-env:
+    # Solo si el PR fue mergeado
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      target_env: ${{ steps.set-env.outputs.ENV_NAME }}
+    steps:
+      - id: set-env
+        run: |
+          if [[ "${{ github.base_ref }}" == "main" ]]; then
+            echo "ENV_NAME=PROD" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.base_ref }}" == release/* ]]; then
+            echo "ENV_NAME=TEST" >> $GITHUB_OUTPUT
+          else
+            echo "ENV_NAME=DEV" >> $GITHUB_OUTPUT
+          fi
+
+  # ==========================================
+  # 2. RUN CI (Todos los ambientes)
+  # ==========================================
+  run-ci:
+    needs: setup-env
+    uses: ./.github/workflows/ci.yml
+    with:
+      env_name: ${{ needs.setup-env.outputs.target_env }}
+    secrets: inherit
+
+  # ==========================================
+  # 3. RUN CT (Solo en DEV)
+  # ==========================================
+  run-ct:
+    needs: [setup-env, run-ci]
+    # Se ejecuta SOLO si el ambiente calculado es DEV
+    if: needs.setup-env.outputs.target_env == 'DEV'
+    uses: ./.github/workflows/ct.yml
+    with:
+      env_name: ${{ needs.setup-env.outputs.target_env }}
+    secrets: inherit
+
+  # ==========================================
+  # 4. RUN CD (Todos los ambientes) + Stress en DEV y TEST
+  # ==========================================
+  run-cd:
+    needs: [setup-env, run-ci, run-ct]
+    # Solo si el entrenamiento (CT) fue exitoso o se saltó (en caso de TEST/PROD)
+    if: always() && needs.run-ci.result == 'success' && (needs.run-ct.result == 'success' || needs.run-ct.result == 'skipped')
+    uses: ./.github/workflows/cd.yml
+    with:
+      env_name: ${{ needs.setup-env.outputs.target_env }}
+    secrets: inherit
